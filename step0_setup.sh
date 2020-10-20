@@ -37,10 +37,15 @@ done
 for i in ${subjList[@]}; do
 
 	# set up dirs
-	mkdir -p ${i}/{BOLD,anatomy,model}
+	mkdir -p ${i}/{BOLD,anatomy,model,masks}
 
 	# anat
 	3dcopy struct_ns+tlrc ${i}/anatomy/struct_ns.nii.gz
+
+	# masks
+	maskDir=${i}/masks/orig
+	mkdir -p $maskDir
+	3dcopy final_mask_GMc+tlrc ${maskDir}/GMc.nii.gz
 
 	for j in ${!taskList[@]}; do
 
@@ -54,7 +59,7 @@ for i in ${subjList[@]}; do
 		for k in ${condList[@]}; do			
 			timing_tool.py -timing tf_${taskList[$j]}_${k}.txt -tr $tr \
 				-stim_dur 2 -run_len $(echo "$runLen*$tr" | bc) -min_frac 0.3 \
-				-timing_to_1D att_${k} -per_run_file
+				-timing_to_1D tmp_att_${k} -per_run_file
 		done
 
 		for((k=1;k<=$numRuns;k++)); do
@@ -69,9 +74,10 @@ for i in ${subjList[@]}; do
 			let start+=$runLen
 			let end+=$runLen
 
-			# Make Attribute file - this is hardcoded (probably better to do in python)
-			att1=(`cat att_hit_r0${k}.1D`)
-			att2=(`cat att_miss_r0${k}.1D`)
+			# Make Attribute file - this is hardcoded
+			#	could resolve with dynamic arrays, probably better to do in python
+			att1=(`cat tmp_att_hit_r0${k}.1D`)
+			att2=(`cat tmp_att_miss_r0${k}.1D`)
 			print=${boldDir}/attributes.txt
 			> $print
 			for m in ${!att1[@]}; do
@@ -99,6 +105,7 @@ for i in ${subjList[@]}; do
 				done
 			done
 		done
+		rm tmp_*
 	done
 done
 
