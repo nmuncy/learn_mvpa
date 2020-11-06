@@ -2,7 +2,10 @@
 Notes
 
 Written in Python 3.8
+
+Assumes gp_step1-3 from afni_python have already been done
 """
+
 # %%
 import subprocess
 import fnmatch
@@ -12,8 +15,6 @@ import pandas as pd
 import numpy as np
 from argparse import ArgumentParser
 from gp_step1_preproc import func_sbatch
-
-# from mvpa_step1_submit import task_dict as h_task_dict
 
 
 # %%
