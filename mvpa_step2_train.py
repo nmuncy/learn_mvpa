@@ -13,7 +13,7 @@ import os
 """
 Import data
 
-How to import entire dataset?
+Just one subject, for testing
 """
 # set up
 data_path = "/scratch/madlab/nate_vCAT/derivatives/mvpa"
@@ -52,12 +52,13 @@ for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
 
 # merge datasets, a=0 means attributes for first
 #   set should be used for all data
-real_ds = vstack(run_datasets, a=0)
-print real_ds.summary()
+fds_all = vstack(run_datasets, a=0)
+print fds_all.summary()
 
-# remove base
-fds = real_ds[real_ds.sa.targets != 'base']
-print fds.shape
+# behavior functional dataset - remove base volumes
+fds_beh = fds_all[fds_all.sa.targets != 'base']
+# print fds_beh.shape
+print fds_beh.summary()
 
 # %%
 """
@@ -65,7 +66,7 @@ Plot
 """
 # hist of feature values
 pl.figure(figsize=(14, 14))  # larger figure
-hist(fds,
+hist(fds_beh,
      xgroup_attr='chunks',
      ygroup_attr='targets',
      noticks=None,
@@ -73,16 +74,16 @@ hist(fds,
      normed=True)
 
 # distance measure, sort by chunks or targets
-fds.samples = fds.samples.astype('float')
+fds_beh.samples = fds_beh.samples.astype('float')
 
 pl.figure(figsize=(14, 6))
 pl.subplot(121)
-plot_samples_distance(fds, sortbyattr='chunks')
+plot_samples_distance(fds_beh, sortbyattr='chunks')
 pl.title('Sample distances (sorted by chunks)')
 
 pl.figure(figsize=(14, 6))
 pl.subplot(122)
-plot_samples_distance(fds, sortbyattr='targets')
+plot_samples_distance(fds_beh, sortbyattr='targets')
 pl.title('Sample distances (sorted by targets)')
 
 # %%
@@ -90,8 +91,8 @@ pl.title('Sample distances (sorted by targets)')
 Train
 """
 # subset dataset for face vs scene
-fds_train = fds[np.array([l in ['face', 'scene'] for l in fds.sa.targets],
-                         dtype='bool')]
+fds_train = fds_beh[np.array(
+    [l in ['face', 'scene'] for l in fds_beh.sa.targets], dtype='bool')]
 
 # set classifier
 # clf = kNN(k=1, dfx=one_minus_correlation, voting='majority')
@@ -105,3 +106,101 @@ cvte = CrossValidation(clf,
 cv_results = cvte(fds_train)
 print cvte.ca.stats.as_string(description=True)
 print cvte.ca.stats.matrix
+
+# %%
+"""
+Sensitivity
+
+This does not seem to agree with above results
+"""
+Clf = LinearCSVMC
+svdmapper = SVDMapper()
+get_SVD_sliced = lambda x: ChainMapper([svdmapper, StaticFeatureSelection(x)])
+
+clfs = [('All orig.\nfeatures (%i)' % fds_train.nfeatures, Clf()),
+        ('All Comps\n(%i)' % (fds_train.nsamples \
+                 - (fds_train.nsamples / len(fds_train.UC)),),
+                        MappedClassifier(Clf(), svdmapper)),
+        ('First 30\nComp.', MappedClassifier(Clf(),
+                        get_SVD_sliced(slice(0, 30)))),
+        ('Comp.\n31-60', MappedClassifier(Clf(),
+                        get_SVD_sliced(slice(31, 60)))),
+        ('Comp.\n61-90', MappedClassifier(Clf(),
+                        get_SVD_sliced(slice(61, 90)))),
+        ('Comp.\n91-120', MappedClassifier(Clf(),
+                        get_SVD_sliced(slice(91, 120)))),
+        ('Comp.\n121-150', MappedClassifier(Clf(),
+                        get_SVD_sliced(slice(121, 150)))),
+        ('Comp.\n151-180', MappedClassifier(Clf(),
+                        get_SVD_sliced(slice(151, 180))))]
+
+# run and visualize in barplot
+results = []
+labels = []
+
+for desc, clf in clfs:
+    print desc.replace('\n', ' ')
+    # cv = CrossValidation(clf, NFoldPartitioner())
+    cv = CrossValidation(clf,
+                         NFoldPartitioner(),
+                         errorfx=lambda p, t: np.mean(p == t))
+    res = cv(fds_train)
+    results.append(res.samples[:, 0])
+    labels.append(desc)
+
+plot_bars(results,
+          labels=labels,
+          title='Linear C-SVM classification (face vs. scene)',
+          ylabel='Mean classification error (N-1 cross-validation, 12-fold)',
+          distance=0.5)
+
+# %%
+"""
+Load all
+"""
+
+# set up
+data_path = "/scratch/madlab/nate_vCAT/derivatives/mvpa"
+dhandle = mvpa2.datasets.sources.OpenFMRIDataset(data_path)
+dhandle.get_subj_ids()
+dhandle.get_task_descriptions()
+
+task = 1
+model = 1
+data_dict = {}
+
+for subj in dhandle.get_task_bold_run_ids(task):
+    print subj
+
+    run_datasets = []
+    for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
+        print run_id
+
+        # pad, mask
+        if subj < 10:
+            subj_num = "sub00" + str(subj)
+        else:
+            subj_num = "sub0" + str(subj)
+
+        mask_fname = os.path.join(data_path, subj_num,
+                                  "masks/orig/GM_int_mask.nii.gz")
+        run_events = dhandle.get_bold_run_model(model, subj, run_id)
+        run_ds = dhandle.get_bold_run_dataset(subj,
+                                              task,
+                                              run_id,
+                                              chunks=run_id - 1,
+                                              mask=mask_fname)
+        run_ds.sa['targets'] = events2sample_attr(run_events,
+                                                  run_ds.sa.time_coords,
+                                                  noinfolabel='base')
+        run_datasets.append(run_ds)
+
+    data_dict[subj] = run_datasets
+    # print(data_dict[subj])
+
+# # How to load all data?
+# fds_all = vstack(run_datasets, a=0)
+# # fds_all = vstack(data_dict, a=0)
+# print fds_all.summary()
+
+# %%
