@@ -199,8 +199,18 @@ for subj in dhandle.get_task_bold_run_ids(task):
     # print(data_dict[subj])
 
 # # How to load all data?
-# fds_all = vstack(run_datasets, a=0)
-# # fds_all = vstack(data_dict, a=0)
-# print fds_all.summary()
+# fds_all = vstack(data_dict[5], a=0)   # works
+fds_all = vstack((data_dict[5], data_dict[6]))  # not work
+print fds_all.summary()
 
+# save all to HDF5 format?
+for key in data_dict:
+    h_fds = vstack(data_dict[key], a=0)
+    mvpa2.base.dataset.save(h_fds,
+                            "{}/{}.gz".format(data_path, key),
+                            name=key,
+                            compression='gzip')
+
+# dataset_list = [os.path.join(data_path, "5.gz"), os.path.join(data_path, "6.gz")]
+# fds_test = vstack((dataset_list))
 # %%
