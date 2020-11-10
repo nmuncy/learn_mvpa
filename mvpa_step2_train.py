@@ -5,7 +5,6 @@ Written for Python 2.7 <-------------!!!
 """
 
 # %%
-import mvpa2
 from mvpa2.suite import *
 import os
 
@@ -161,6 +160,7 @@ Load all
 
 # set up
 data_path = "/scratch/madlab/nate_vCAT/derivatives/mvpa"
+hdf5_path = os.path.join(data_path, "hdf5")
 dhandle = mvpa2.datasets.sources.OpenFMRIDataset(data_path)
 dhandle.get_subj_ids()
 dhandle.get_task_descriptions()
@@ -169,48 +169,51 @@ task = 1
 model = 1
 data_dict = {}
 
-for subj in dhandle.get_task_bold_run_ids(task):
-    print subj
+# load data
+if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
+    for subj in dhandle.get_task_bold_run_ids(task):
+        print subj
 
-    run_datasets = []
-    for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
-        print run_id
+        run_datasets = []
+        for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
+            print run_id
 
-        # pad, mask
-        if subj < 10:
-            subj_num = "sub00" + str(subj)
-        else:
-            subj_num = "sub0" + str(subj)
+            # pad, mask
+            if subj < 10:
+                subj_num = "sub00" + str(subj)
+            else:
+                subj_num = "sub0" + str(subj)
 
-        mask_fname = os.path.join(data_path, subj_num,
-                                  "masks/orig/GM_int_mask.nii.gz")
-        run_events = dhandle.get_bold_run_model(model, subj, run_id)
-        run_ds = dhandle.get_bold_run_dataset(subj,
-                                              task,
-                                              run_id,
-                                              chunks=run_id - 1,
-                                              mask=mask_fname)
-        run_ds.sa['targets'] = events2sample_attr(run_events,
-                                                  run_ds.sa.time_coords,
-                                                  noinfolabel='base')
-        run_datasets.append(run_ds)
+            mask_fname = os.path.join(data_path, subj_num,
+                                      "masks/orig/GM_int_mask.nii.gz")
+            run_events = dhandle.get_bold_run_model(model, subj, run_id)
+            run_ds = dhandle.get_bold_run_dataset(subj,
+                                                  task,
+                                                  run_id,
+                                                  chunks=run_id - 1,
+                                                  mask=mask_fname)
+            run_ds.sa['targets'] = events2sample_attr(run_events,
+                                                      run_ds.sa.time_coords,
+                                                      noinfolabel='base')
+            run_datasets.append(run_ds)
 
-    data_dict[subj] = run_datasets
-    # print(data_dict[subj])
+        data_dict[subj] = run_datasets
 
-# # How to load all data?
-# fds_all = vstack(data_dict[5], a=0)   # works
-fds_all = vstack((data_dict[5], data_dict[6]))  # not work
-print fds_all.summary()
+    # save all data as one file
+    mvpa2.base.hdf5.h5save(os.path.join(hdf5_path, "data_all.hdf5.gz"),
+                           data_dict,
+                           mode='w',
+                           mkdir=True,
+                           compression="gzip")
 
-# save all to HDF5 format?
-for key in data_dict:
-    h_fds = vstack(data_dict[key], a=0)
-    mvpa2.base.dataset.save(h_fds,
-                            "{}/{}.gz".format(data_path, key),
-                            name=key,
-                            compression='gzip')
+# %%
+"""
+Hyperalignment
+"""
+# get data
+fds_all = h5load(os.path.join(hdf5_path, "data_all.hdf5.gz"), name=None)
 
-# dataset_list = [os.path.join(data_path, "5.gz"), os.path.join(data_path, "6.gz")]
-# fds_test = vstack((dataset_list))
+# inject the subject ID into all datasets
+# for i, sd in enumerate(fds_all):
+#     sd.sa['subject'] = np.repeat(i, len(sd))
 # %%
