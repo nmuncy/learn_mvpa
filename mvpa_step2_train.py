@@ -7,13 +7,14 @@ Written for Python 2.7 <-------------!!!
 # %%
 from mvpa2.suite import *
 import os
+import gc
 
 # %%
 """
-Import data
-
-Just one subject, for testing
+Test run - do for one subj
 """
+
+# ## Import data
 # set up
 data_path = "/scratch/madlab/nate_vCAT/derivatives/mvpa"
 mask_fname = os.path.join(data_path, "sub005/masks/orig/GM_int_mask.nii.gz")
@@ -60,9 +61,7 @@ fds_beh = fds_all[fds_all.sa.targets != 'base']
 print fds_beh.summary()
 
 # %%
-"""
-Plot
-"""
+# ##Plot
 # hist of feature values
 pl.figure(figsize=(14, 14))  # larger figure
 hist(fds_beh,
@@ -86,9 +85,7 @@ plot_samples_distance(fds_beh, sortbyattr='targets')
 pl.title('Sample distances (sorted by targets)')
 
 # %%
-"""
-Train
-"""
+# ##Train
 # subset dataset for face vs scene
 fds_train = fds_beh[np.array(
     [l in ['face', 'scene'] for l in fds_beh.sa.targets], dtype='bool')]
@@ -107,11 +104,9 @@ print cvte.ca.stats.as_string(description=True)
 print cvte.ca.stats.matrix
 
 # %%
-"""
-Sensitivity
+# ##Sensitivity
+#   This does not seem to agree with above results
 
-This does not seem to agree with above results
-"""
 Clf = LinearCSVMC
 svdmapper = SVDMapper()
 get_SVD_sliced = lambda x: ChainMapper([svdmapper, StaticFeatureSelection(x)])
@@ -155,19 +150,26 @@ plot_bars(results,
 
 # %%
 """
-Load all
+Real Work
+
+MVPA with all data
+
+Step 0: Load data
 """
 
 # set up
-data_path = "/scratch/madlab/nate_vCAT/derivatives/mvpa"
+data_path = "/Users/nmuncy/Projects/learn_mvpa/mvpa"
+tutorial_path = os.path.join(data_path, "datadb")
 hdf5_path = os.path.join(data_path, "hdf5")
+
+# %%
 dhandle = mvpa2.datasets.sources.OpenFMRIDataset(data_path)
 dhandle.get_subj_ids()
 dhandle.get_task_descriptions()
 
 task = 1
 model = 1
-data_dict = {}
+data_list = []
 
 if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
 
@@ -179,51 +181,69 @@ if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
         for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
             print run_id
 
-            # pad, mask
+            # pad
             if subj < 10:
                 subj_num = "sub00" + str(subj)
             else:
                 subj_num = "sub0" + str(subj)
 
+            # determine mask
             mask_fname = os.path.join(data_path, subj_num,
                                       "masks/orig/GM_int_mask.nii.gz")
+
+            # get model
             run_events = dhandle.get_bold_run_model(model, subj, run_id)
+
+            # get data
             run_ds = dhandle.get_bold_run_dataset(subj,
                                                   task,
                                                   run_id,
                                                   chunks=run_id - 1,
                                                   mask=mask_fname)
+
+            # get behavior events
             run_ds.sa['targets'] = events2sample_attr(run_events,
                                                       run_ds.sa.time_coords,
                                                       noinfolabel='base')
             run_datasets.append(run_ds)
 
-        data_dict[subj] = run_datasets
+        # append list, collapse across runs
+        data_list.append(vstack(run_datasets, a=0))
 
     # save all data as one file
     mvpa2.base.hdf5.h5save(os.path.join(hdf5_path, "data_all.hdf5.gz"),
-                           data_dict,
+                           data_list,
                            mode='w',
                            mkdir=True,
                            compression="gzip")
 
+del run_ds
+del data_list
+del run_datasets
+
 # %%
 """
-Hyperalignment
+Step 2: Hyperalignment
 """
 
 # example - get data
-filepath = os.path.join(pymvpa_datadbroot,
-                        'hyperalignment_tutorial_data.hdf5.gz')
-ds_all = h5load(filepath)
+ds_all = h5load(
+    os.path.join(tutorial_path, "hyperalignment_tutorial_data.hdf5.gz"))
 
 # real - get data
 fds_all = h5load(os.path.join(hdf5_path, "data_all.hdf5.gz"))
 
 # example - zscore, inject the subject ID into all datasets
 _ = [zscore(ds) for ds in ds_all]
-# inject the subject ID into all datasets
 for i, sd in enumerate(ds_all):
     sd.sa['subject'] = np.repeat(i, len(sd))
+
+len(ds_all)
+len(ds_all[0].UT)
+len(ds_all[0].UC)
+
+# real - verify
+len(fds_all)
+len(fds_all[0].UT)
 
 # %%
