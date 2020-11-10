@@ -242,8 +242,38 @@ len(ds_all)
 len(ds_all[0].UT)
 len(ds_all[0].UC)
 
-# real - verify
+# real - match
+for i, sd in enumerate(fds_all):
+    sd.sa['subject'] = np.repeat(i, len(sd))
 len(fds_all)
 len(fds_all[0].UT)
+len(fds_all[0].UC)
+
+# %%
+# Classifier
+clf = LinearCSVMC()
+nf = 100
+fselector = FixedNElementTailSelector(nf,
+                                      tail='upper',
+                                      mode='select',
+                                      sort=False)
+sbfs = SensitivityBasedFeatureSelection(OneWayAnova(),
+                                        fselector,
+                                        enable_ca=['sensitivities'])
+fsclf = FeatureSelectionClassifier(clf, sbfs)
+
+cv = CrossValidation(fsclf,
+                     NFoldPartitioner(attr='chunks'),
+                     errorfx=mean_match_accuracy)
+
+# example - train
+wsc_results = [cv(sd) for sd in ds_all]
+wsc_results = vstack(wsc_results)
+
+ds_mni = vstack(ds_all)
+cv = CrossValidation(fsclf,
+                     NFoldPartitioner(attr='subject'),
+                     errorfx=mean_match_accuracy)
+bsc_mni_results = cv(ds_mni)
 
 # %%
