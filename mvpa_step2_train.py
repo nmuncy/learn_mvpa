@@ -169,8 +169,9 @@ task = 1
 model = 1
 data_dict = {}
 
-# load data
 if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
+
+    # load data
     for subj in dhandle.get_task_bold_run_ids(task):
         print subj
 
@@ -210,10 +211,19 @@ if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
 """
 Hyperalignment
 """
-# get data
-fds_all = h5load(os.path.join(hdf5_path, "data_all.hdf5.gz"), name=None)
 
+# example - get data
+filepath = os.path.join(pymvpa_datadbroot,
+                        'hyperalignment_tutorial_data.hdf5.gz')
+ds_all = h5load(filepath)
+
+# real - get data
+fds_all = h5load(os.path.join(hdf5_path, "data_all.hdf5.gz"))
+
+# example - zscore, inject the subject ID into all datasets
+_ = [zscore(ds) for ds in ds_all]
 # inject the subject ID into all datasets
-# for i, sd in enumerate(fds_all):
-#     sd.sa['subject'] = np.repeat(i, len(sd))
+for i, sd in enumerate(ds_all):
+    sd.sa['subject'] = np.repeat(i, len(sd))
+
 # %%
