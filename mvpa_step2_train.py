@@ -109,24 +109,28 @@ print cvte.ca.stats.matrix
 
 Clf = LinearCSVMC
 svdmapper = SVDMapper()
-get_SVD_sliced = lambda x: ChainMapper([svdmapper, StaticFeatureSelection(x)])
+
+
+def get_SVD_sliced(x): return ChainMapper(
+    [svdmapper, StaticFeatureSelection(x)])
+
 
 clfs = [('All orig.\nfeatures (%i)' % fds_train.nfeatures, Clf()),
-        ('All Comps\n(%i)' % (fds_train.nsamples \
-                 - (fds_train.nsamples / len(fds_train.UC)),),
-                        MappedClassifier(Clf(), svdmapper)),
+        ('All Comps\n(%i)' % (fds_train.nsamples
+                              - (fds_train.nsamples / len(fds_train.UC)),),
+         MappedClassifier(Clf(), svdmapper)),
         ('First 30\nComp.', MappedClassifier(Clf(),
-                        get_SVD_sliced(slice(0, 30)))),
+                                             get_SVD_sliced(slice(0, 30)))),
         ('Comp.\n31-60', MappedClassifier(Clf(),
-                        get_SVD_sliced(slice(31, 60)))),
+                                          get_SVD_sliced(slice(31, 60)))),
         ('Comp.\n61-90', MappedClassifier(Clf(),
-                        get_SVD_sliced(slice(61, 90)))),
+                                          get_SVD_sliced(slice(61, 90)))),
         ('Comp.\n91-120', MappedClassifier(Clf(),
-                        get_SVD_sliced(slice(91, 120)))),
+                                           get_SVD_sliced(slice(91, 120)))),
         ('Comp.\n121-150', MappedClassifier(Clf(),
-                        get_SVD_sliced(slice(121, 150)))),
+                                            get_SVD_sliced(slice(121, 150)))),
         ('Comp.\n151-180', MappedClassifier(Clf(),
-                        get_SVD_sliced(slice(151, 180))))]
+                                            get_SVD_sliced(slice(151, 180))))]
 
 # run and visualize in barplot
 results = []
@@ -171,51 +175,54 @@ task = 1
 model = 1
 data_list = []
 
-if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
+# if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
 
-    # load data
-    for subj in dhandle.get_task_bold_run_ids(task):
-        print subj
+# load data
+for subj in dhandle.get_task_bold_run_ids(task):
+    # subj = 5
+    print subj
 
-        run_datasets = []
-        for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
-            print run_id
+    run_datasets = []
+    for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
+        print run_id
 
-            # pad
-            if subj < 10:
-                subj_num = "sub00" + str(subj)
-            else:
-                subj_num = "sub0" + str(subj)
+        # pad
+        if subj < 10:
+            subj_num = "sub00" + str(subj)
+        else:
+            subj_num = "sub0" + str(subj)
 
-            # determine mask
-            mask_fname = os.path.join(data_path, subj_num,
-                                      "masks/orig/GM_int_mask.nii.gz")
+        # determine mask
+        mask_fname = os.path.join(data_path, subj_num,
+                                  "masks/orig/GM_int_mask.nii.gz")
 
-            # get model
-            run_events = dhandle.get_bold_run_model(model, subj, run_id)
+        # get model
+        run_events = dhandle.get_bold_run_model(model, subj, run_id)
 
-            # get data
-            run_ds = dhandle.get_bold_run_dataset(subj,
-                                                  task,
-                                                  run_id,
-                                                  chunks=run_id - 1,
-                                                  mask=mask_fname)
+        # get data
+        run_ds = dhandle.get_bold_run_dataset(subj,
+                                              task,
+                                              run_id,
+                                              chunks=run_id - 1,
+                                              mask=mask_fname)
 
-            # get behavior events
-            run_ds.sa['targets'] = events2sample_attr(run_events,
-                                                      run_ds.sa.time_coords,
-                                                      noinfolabel='base')
-            run_datasets.append(run_ds)
+        # get behavior events
+        run_ds.sa['targets'] = events2sample_attr(run_events,
+                                                  run_ds.sa.time_coords,
+                                                  noinfolabel='base')
 
-        # append list, collapse across runs
-        data_list.append(vstack(run_datasets, a=0))
+        run_datasets.append(run_ds)
+    print run_ds.fa.values()
 
-    # save all data as one file
-    mvpa2.base.hdf5.h5save(os.path.join(hdf5_path, "data_all.hdf5.gz"),
-                           data_list,
-                           mode='w',
-                           mkdir=True,
-                           compression="gzip")
+    # append list, collapse across runs
+    data_list.append(vstack(run_datasets, a=0))
+
+# save all data as one file
+mvpa2.base.hdf5.h5save(os.path.join(hdf5_path, "data_all.hdf5.gz"),
+                       data_list,
+                       mode='w',
+                       mkdir=True,
+                       compression="gzip")
 
 del run_ds
 del data_list
@@ -250,30 +257,45 @@ len(fds_all[0].UT)
 len(fds_all[0].UC)
 
 # %%
-# Classifier
+# Classifier, feature selection - 100 highest
 clf = LinearCSVMC()
 nf = 100
+
 fselector = FixedNElementTailSelector(nf,
                                       tail='upper',
                                       mode='select',
                                       sort=False)
+
 sbfs = SensitivityBasedFeatureSelection(OneWayAnova(),
                                         fselector,
                                         enable_ca=['sensitivities'])
+
 fsclf = FeatureSelectionClassifier(clf, sbfs)
 
-cv = CrossValidation(fsclf,
-                     NFoldPartitioner(attr='chunks'),
-                     errorfx=mean_match_accuracy)
+# classify within, between
+cvws = CrossValidation(fsclf,
+                       NFoldPartitioner(attr='chunks'),
+                       errorfx=mean_match_accuracy)
 
-# example - train
-wsc_results = [cv(sd) for sd in ds_all]
+cvbs = CrossValidation(fsclf,
+                       NFoldPartitioner(attr='subject'),
+                       errorfx=mean_match_accuracy)
+
+# example - train within/between-subject classifier
+wsc_results = [cvws(sd) for sd in ds_all]
 wsc_results = vstack(wsc_results)
 
-ds_mni = vstack(ds_all)
-cv = CrossValidation(fsclf,
-                     NFoldPartitioner(attr='subject'),
-                     errorfx=mean_match_accuracy)
-bsc_mni_results = cv(ds_mni)
+ds_comb = vstack(ds_all)
+bsc_results = cvbs(ds_comb)
+
+# real
+wsc_real = [cvws(sd) for sd in fds_all]
+wsc_real = vstack(wsc_real)
+
+# issue coming from fds_all.fa.values() being unequal?
+#   masks are different sizes
+#   solution - make group int mask in mvpa_step1
+fds_comb = vstack(fds_all)
+bsc_real = cvbs(fds_all)
 
 # %%
