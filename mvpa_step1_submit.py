@@ -15,7 +15,7 @@ import json
 # set up
 deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
 mvpa_dir = os.path.join(deriv_dir, "mvpa")
-code_dir = "/home/nmuncy/compute/afni_python"
+code_dir = "/home/nmuncy/compute/learn_mvpa"
 task_dict = {"loc": ["face", "scene", "num"]}
 sess = "ses-S1"
 beh_dur = 1
@@ -82,7 +82,51 @@ def main():
 
     # %%
     """
-    Step 2: Submit job for each subject
+    Step 2: Group Intersection Mask
+
+    PyMVPA requires the same number of voxels for each
+    participant. Rather than use a template brain mask,
+    use a group gray matter intersection mask.
+    """
+    group_dir = os.path.join(deriv_dir, "grpAnalysis")
+    if not os.path.exists(group_dir):
+        os.makedirs(group_dir)
+
+    if not os.path.exists(os.path.join(group_dir, "Group_Int_Mask.nii.gz")):
+        mask_list = []
+        for subj in subj_list:
+            mask_file = os.path.join(deriv_dir, subj, "ses-S1/mask_epi_anat+tlrc.HEAD")
+            if os.path.exists(mask_file):
+                mask_list.append(mask_file.split(".")[0])
+
+        # combine anat-epi intersection masks of all subjs
+        if not os.path.exists(os.path.join(group_dir, "Group_epi_int.nii.gz")):
+            h_cmd = f"""
+                module load afni-20.2.06
+                3dMean -prefix {group_dir}/Group_epi_mean.nii.gz {" ".join(mask_list)}
+                3dmask_tool -input {" ".join(mask_list)} -frac 1 -prefix {group_dir}/Group_epi_int.nii.gz
+            """
+            subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE).wait()
+
+        # make GM mask, GM intersection mask
+        atropos_dir = "/home/data/madlab/atlases/vold2_mni/priors_ACT"
+        h_cmd = f"""
+            module load c3d/1.0.0
+            module load afni-20.2.06
+
+            cd {group_dir}
+            c3d {atropos_dir}/Prior2.nii.gz {atropos_dir}/Prior4.nii.gz -add -o tmp_Prior_GM.nii.gz
+            3dresample -master {mask_list[0]} -rmode NN -input tmp_Prior_GM.nii.gz -prefix tmp_Template_GM_mask.nii.gz
+
+            c3d tmp_Template_GM_mask.nii.gz Group_epi_int.nii.gz -multiply -o tmp_Intersection_GM_prob_mask.nii.gz
+            c3d tmp_Intersection_GM_prob_mask.nii.gz -thresh 0.1 1 1 0 -o Group_Int_Mask.nii.gz
+            rm tmp_*
+        """
+        subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE).wait()
+
+    # %%
+    """
+    Step 3: Submit job for each subject
     """
     # set up stdout/err capture
     current_time = datetime.now()
