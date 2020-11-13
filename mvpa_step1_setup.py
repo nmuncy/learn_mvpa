@@ -18,7 +18,6 @@ from shutil import copyfile
 from argparse import ArgumentParser
 
 
-# %%
 def func_sbatch(command, wall_hours, mem_gig, num_proc, h_str, work_dir):
 
     full_name = f"{work_dir}/sbatch_writeOut_{h_str}"
@@ -52,78 +51,58 @@ def func_sbatch(command, wall_hours, mem_gig, num_proc, h_str, work_dir):
     print(f'Sbatch job "{h_str}" finished')
 
 
+# %%
 def func_job(subj, subj_dir, decon_type, len_tr, task_dict, beh_dur, der_dir):
     """
     Step 1: Detrend
 
-    1) Currently using "clean data" approach. Also, only using
-        2GAM, not TENT data
+    Originally using the CleanData method, similar to PPI.
 
-        Should I just train on deconvolved sub-bricks?
+    Update - using TENT sub-bricks
+
     """
 
     # # For testing
     # subj = "sub-005"
     # subj_dir = "/scratch/madlab/nate_vCAT/derivatives/sub-005/ses-S1"
-    # decon_type = "2GAM"
+    # decon_type = "TENT"
     # len_tr = 1.76
     # task_dict = {"loc": ["face", "scene", "num"]}
-    # beh_dur = 1.25
+    # beh_dur = 1
     # der_dir = "/scratch/madlab/nate_vCAT/derivatives"
 
     # Work
     subj_num = subj.split("-")[1]
     mvpa_dir = os.path.join(der_dir, f"mvpa/sub{subj_num}")
 
+    # collapse TENT coef sub-bricks
     for phase in task_dict.keys():
 
-        # get proper brick length
-        #   REML appends an extra brick because
-        #   "reasons". Account for AFNI's random
-        #   0-1 indexing
-        h_cmd = f"module load afni-20.2.06 \n 3dinfo -nv {subj_dir}/{phase}_{decon_type}_cbucket_REML+tlrc"
-        h_len = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-        len_wrong = h_len.communicate()[0].decode("utf-8").strip()
-        len_right = int(len_wrong) - 2
-
-        # list all scale files
-        scale_list = [
-            x.split(".")[0]
-            for x in os.listdir(subj_dir)
-            if fnmatch.fnmatch(x, f"*{phase}*scale+tlrc.HEAD")
-        ]
-        scale_list.sort()
-
-        # make clean data
-        if not os.path.exists(os.path.join(subj_dir, f"CleanData_{phase}+tlrc.HEAD")):
-
-            # list undesirable sub-bricks (those starting with Run or mot)
-            no_int = []
+        # determine relevant sub-bricks
+        if not os.path.exists(os.path.join(subj_dir, f"MVPA_{phase}_all+tlrc.HEAD")):
+            brick_list = []
             with open(os.path.join(subj_dir, f"X.{phase}_{decon_type}.xmat.1D")) as f:
                 h_file = f.readlines()
                 for line in h_file:
                     if line.__contains__("ColumnLabels"):
-                        col_list = (
-                            line.replace("#", "")
-                            .split('"')[1]
-                            .replace(" ", "")
-                            .split(";")
-                        )
+                        col_list = line.split('"')[1].replace(" ", "").split(";")
                         for i, j in enumerate(col_list):
-                            if fnmatch.fnmatch(j, "Run*") or fnmatch.fnmatch(j, "mot*"):
-                                no_int.append(f"{str(i)}")
+                            if j.split("#")[0] in task_dict[phase]:
+                                brick_list.append(f"{str(i)}")
 
-            # strip extra sub-brick, make clean data by removing
-            #   effects of no interest from concatenated runs
+            # strip extra sub-brick, make mvpa all
+            h_cmd = f"module load afni-20.2.06 \n 3dinfo -nv {subj_dir}/{phase}_{decon_type}_cbucket_REML+tlrc"
+            h_len = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+            len_wrong = h_len.communicate()[0].decode("utf-8").strip()
+            len_right = int(len_wrong) - 2
+
             h_cmd = f"""
                 cd {subj_dir}
                 3dTcat -prefix tmp_{phase}_cbucket -tr {len_tr} "{phase}_{decon_type}_cbucket_REML+tlrc[0..{len_right}]"
-                3dSynthesize -prefix tmp_effNoInt_{phase} -matrix X.{phase}_{decon_type}.xmat.1D \
-                    -cbucket tmp_{phase}_cbucket+tlrc -select {" ".join(no_int)} -cenfill nbhr
-                3dTcat -prefix tmp_all_runs_{phase} -tr {len_tr} {" ".join(scale_list)}
-                3dcalc -a tmp_all_runs_{phase}+tlrc -b tmp_effNoInt_{phase}+tlrc -expr 'a-b' -prefix CleanData_{phase}
+                3dSynthesize -prefix MVPA_{phase}_all -matrix X.{phase}_{decon_type}.xmat.1D \
+                        -cbucket tmp_{phase}_cbucket+tlrc -select {" ".join(brick_list)} -cenfill nbhr
             """
-            func_sbatch(h_cmd, 1, 4, 1, f"{subj_num}cle", subj_dir)
+            func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}all", subj_dir)
 
     # %%
     """
@@ -148,34 +127,35 @@ def func_job(subj, subj_dir, decon_type, len_tr, task_dict, beh_dur, der_dir):
     if not os.path.exists(mask_dir):
         os.makedirs(mask_dir)
 
-    # pull, binarize priors
-    atropos_dict = {2: "GMc", 4: "GMs"}
-    atropos_dir = "/home/data/madlab/atlases/vold2_mni/priors_ACT"
-    for i in atropos_dict:
-        if not os.path.exists(
-            os.path.join(subj_dir, f"tmp_{atropos_dict[i]}_bin.nii.gz")
-        ):
-            h_cmd = f"module load c3d/1.0.0 \n c3d {atropos_dir}/Prior{i}.nii.gz -thresh 0.3 1 1 0 -o {subj_dir}/tmp_{atropos_dict[i]}_bin.nii.gz"
-            h_mask = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-            out, err = h_mask.communicate()
-            print(out, err)
+    # # pull, binarize priors
+    # atropos_dict = {2: "GMc", 4: "GMs"}
+    # atropos_dir = "/home/data/madlab/atlases/vold2_mni/priors_ACT"
+    # for i in atropos_dict:
+    #     if not os.path.exists(
+    #         os.path.join(subj_dir, f"tmp_{atropos_dict[i]}_bin.nii.gz")
+    #     ):
+    #         h_cmd = f"module load c3d/1.0.0 \n c3d {atropos_dir}/Prior{i}.nii.gz -thresh 0.3 1 1 0 -o {subj_dir}/tmp_{atropos_dict[i]}_bin.nii.gz"
+    #         h_mask = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+    #         out, err = h_mask.communicate()
+    #         print(out, err)
 
-    # make resampled GM-intersection mask
-    if not os.path.exists(os.path.join(mask_dir, "GM_int_mask.nii.gz")):
-        h_cmd = f"""
-            module load c3d/1.0.0
+    # # make resampled GM-intersection mask
+    # if not os.path.exists(os.path.join(mask_dir, "GM_int_mask.nii.gz")):
+    #     h_cmd = f"""
+    #         module load c3d/1.0.0
 
-            cd {subj_dir}
-            c3d tmp_GMc_bin.nii.gz tmp_GMs_bin.nii.gz -add -o tmp_GM.nii.gz
-            c3d tmp_GM.nii.gz -thresh 0.1 10 1 0 -o tmp_GM_bin.nii.gz
+    #         cd {subj_dir}
+    #         c3d tmp_GMc_bin.nii.gz tmp_GMs_bin.nii.gz -add -o tmp_GM.nii.gz
+    #         c3d tmp_GM.nii.gz -thresh 0.1 10 1 0 -o tmp_GM_bin.nii.gz
 
-            3dfractionize -template CleanData_{phase}+tlrc -input tmp_GM_bin.nii.gz -prefix tmp_GM_res.nii.gz
-            3dcalc -a tmp_GM_res.nii.gz -prefix tmp_GM_res_bin.nii.gz -expr 'step(a-3000)'
+    #         3dfractionize -template MVPA_{phase}_all+tlrc
+    #         # 3dfractionize -template CleanData_{phase}+tlrc -input tmp_GM_bin.nii.gz -prefix tmp_GM_res.nii.gz
+    #         3dcalc -a tmp_GM_res.nii.gz -prefix tmp_GM_res_bin.nii.gz -expr 'step(a-3000)'
 
-            3dcopy mask_epi_anat+tlrc tmp_mask_epi_anat.nii.gz
-            c3d tmp_mask_epi_anat.nii.gz tmp_GM_res_bin.nii.gz -multiply -o {mask_dir}/GM_int_mask.nii.gz
-        """
-        func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}msk", subj_dir)
+    #         3dcopy mask_epi_anat+tlrc tmp_mask_epi_anat.nii.gz
+    #         c3d tmp_mask_epi_anat.nii.gz tmp_GM_res_bin.nii.gz -multiply -o {mask_dir}/GM_int_mask.nii.gz
+    #     """
+    #     func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}msk", subj_dir)
 
     # get group mask
     if not os.path.exists(os.path.join(mask_dir, "Group_Int_Mask.nii.gz")):
@@ -187,10 +167,19 @@ def func_job(subj, subj_dir, decon_type, len_tr, task_dict, beh_dur, der_dir):
     # BOLD - split into runs
     for count, phase in enumerate(task_dict.keys()):
 
-        h_cmd = f"module load afni-20.2.06 \n 3dinfo -ntimes {subj_dir}/CleanData_{phase}+tlrc"
+        h_cmd = (
+            f"module load afni-20.2.06 \n 3dinfo -ntimes {subj_dir}/MVPA_{phase}_all+tlrc"
+            # f"module load afni-20.2.06 \n 3dinfo -ntimes {subj_dir}/CleanData_{phase}+tlrc"
+        )
         h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
         num_nvol = int(h_nvol.communicate()[0].decode("utf-8").strip())
-        num_runs = len(scale_list)
+        num_runs = len(
+            [
+                x
+                for x in os.listdir(subj_dir)
+                if fnmatch.fnmatch(x, f"*{phase}*scale+tlrc.HEAD")
+            ]
+        )
         len_run = int(num_nvol / num_runs)
 
         beg_vol = 0
@@ -202,8 +191,8 @@ def func_job(subj, subj_dir, decon_type, len_tr, task_dict, beh_dur, der_dir):
             if not os.path.exists(os.path.join(bold_dir, "bold.nii.gz")):
                 h_cmd = f"""
                     cd {subj_dir}
-                    3dTcat -prefix tmp_run-{run}_{phase}_CleanData -tr {len_tr} "CleanData_{phase}+tlrc[{beg_vol}..{end_vol}]"
-                    3dcopy tmp_run-{run}_{phase}_CleanData+tlrc {bold_dir}/bold.nii.gz
+                    3dTcat -prefix tmp_run-{run}_{phase}_MVPA -tr {len_tr} "MVPA_{phase}_all+tlrc[{beg_vol}..{end_vol}]"
+                    3dcopy tmp_run-{run}_{phase}_MVPA+tlrc {bold_dir}/bold.nii.gz
                 """
                 func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}spl", subj_dir)
             beg_vol += len_run
@@ -246,7 +235,7 @@ def func_job(subj, subj_dir, decon_type, len_tr, task_dict, beh_dur, der_dir):
             ):
                 h_cmd = f"""
                     module load afni-20.2.06 \n timing_tool.py -timing {subj_dir}/tf_{phase}_{cond}.txt \
-                        -tr {len_tr} -stim_dur {beh_dur} -run_len {len_sec} -min_frac 0.3 -timing_to_1D \
+                        -tr {len_tr} -stim_dur {beh_dur} -run_len {len_sec} -timing_to_1D \
                         {subj_dir}/tmp_tf_{phase}_{cond} -per_run_file
                 """
                 h_spl = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
@@ -292,10 +281,10 @@ def func_job(subj, subj_dir, decon_type, len_tr, task_dict, beh_dur, der_dir):
 
                 # remove volumes that had multiple behaviors
                 if df_att[column_list].iloc[i].sum() > 1:
-                    df_att.at[i, "att"] = "rest"
+                    df_att.at[i, "att"] = "base"
 
             # fill NaN with rest, add col of 0s for some reason
-            df_att = df_att.replace(np.nan, "rest", regex=True)
+            df_att = df_att.replace(np.nan, "base", regex=True)
             df_att["zero"] = 0
 
             # write
@@ -358,7 +347,7 @@ def main():
     with open(os.path.join(args.h_der, "mvpa/task_dict.json")) as json_file:
         h_task_dict = json.load(json_file)
 
-    # print(args.h_sub, args.h_dir, args.h_dct, args.h_trl, h_task_dict, args.h_beh)
+    # print(args.h_sub, args.h_dir, args.h_dct, args.h_trl, h_task_dict, args.h_beh, args.h_der)
     func_job(
         args.h_sub,
         args.h_dir,

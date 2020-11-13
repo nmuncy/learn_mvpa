@@ -19,7 +19,7 @@ code_dir = "/home/nmuncy/compute/learn_mvpa"
 task_dict = {"loc": ["face", "scene", "num"]}
 sess = "ses-S1"
 beh_dur = 1
-decon_type = "2GAM"
+decon_type = "TENT"
 
 
 # %%
