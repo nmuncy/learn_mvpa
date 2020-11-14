@@ -2,6 +2,9 @@
 Notes
 
 Written for Python 2.7 <-------------!!!
+
+TODO:
+    1) Remove num from train set
 """
 
 # %%
@@ -164,7 +167,7 @@ data_path = "/Users/nmuncy/Projects/learn_mvpa/mvpa"
 tutorial_path = os.path.join(data_path, "datadb")
 hdf5_path = os.path.join(data_path, "hdf5")
 
-# %%
+# load dataset
 dhandle = mvpa2.datasets.sources.OpenFMRIDataset(data_path)
 dhandle.get_subj_ids()
 dhandle.get_task_descriptions()
@@ -209,6 +212,9 @@ if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
                                                       run_ds.sa.time_coords,
                                                       noinfolabel='base')
 
+            # clean, save
+            run_ds = run_ds[run_ds.sa.targets != 'base']
+            run_ds = run_ds[run_ds.sa.targets != 'num']
             run_datasets.append(run_ds)
 
         # check that number of voxels (length) is equal across subjs
@@ -225,9 +231,9 @@ if not os.path.exists(os.path.join(hdf5_path, "data_all.hdf5.gz")):
                            mkdir=True,
                            compression="gzip")
 
-del run_ds
-del data_list
-del run_datasets
+    del run_ds
+    del data_list
+    del run_datasets
 
 # %%
 """
@@ -257,7 +263,6 @@ nsubjs_real = len(fds_all)
 ncats_real = len(fds_all[0].UT)
 nruns_real = len(fds_all[0].UC)
 
-# %%
 # Classifier, feature selection - 100 highest
 clf = LinearCSVMC()
 nf = 100
@@ -476,7 +481,7 @@ sm_hyper = np.corrcoef(ds_hyper.get_mapped(mean_group_sample(['targets'])))
 ds_fs = vstack(ds_fs)
 sm_anat = np.corrcoef(ds_fs.get_mapped(mean_group_sample(['targets'])))
 
-intended_label_order = [0, 2, 1, 3]
+intended_label_order = [0, 1]
 labels = fds_all[0].UT
 labels = labels[intended_label_order]
 
