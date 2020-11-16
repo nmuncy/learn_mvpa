@@ -238,10 +238,10 @@ def func_train(hdf5_path, group_path):
     """
 
     # For testing
-    par_path = "/Users/nmuncy/Projects/learn_mvpa"
-    group_path = os.path.join(par_path, "grpAnalysis")
-    data_path = os.path.join(par_path, "mvpa")
-    hdf5_path = os.path.join(data_path, "hdf5")
+    # par_path = "/Users/nmuncy/Projects/learn_mvpa"
+    # group_path = os.path.join(par_path, "grpAnalysis")
+    # data_path = os.path.join(par_path, "mvpa")
+    # hdf5_path = os.path.join(data_path, "hdf5")
 
     # get data
     fds_all = h5load(os.path.join(hdf5_path, "data_all.hdf5.gz"))
