@@ -38,7 +38,8 @@ def main():
         pseudo BIDS formatting for directory hierarchy, file names,
         and info in files.
     """
-    subj_list = [x for x in os.listdir(deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
+    subj_list = [x for x in os.listdir(
+        deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
     subj_list.sort()
     if not os.path.exists(mvpa_dir):
         os.makedirs(mvpa_dir)
@@ -95,7 +96,8 @@ def main():
     if not os.path.exists(os.path.join(group_dir, "Group_Int_Mask.nii.gz")):
         mask_list = []
         for subj in subj_list:
-            mask_file = os.path.join(deriv_dir, subj, "ses-S1/mask_epi_anat+tlrc.HEAD")
+            mask_file = os.path.join(
+                deriv_dir, subj, "ses-S1/mask_epi_anat+tlrc.HEAD")
             if os.path.exists(mask_file):
                 mask_list.append(mask_file.split(".")[0])
 
@@ -145,14 +147,15 @@ def main():
         subj_dir = os.path.join(deriv_dir, subj, sess)
         sbatch_job = f"""
             sbatch \
-            -J "PPI{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
+            -J "MVPA1{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
             -p centos7_IB_44C_512G  -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step1_setup.py \
                 {subj} {subj_dir} {decon_type} {len_tr} {beh_dur} {deriv_dir}"
         """
 
-        sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
+        sbatch_submit = subprocess.Popen(
+            sbatch_job, shell=True, stdout=subprocess.PIPE)
         job_id = sbatch_submit.communicate()[0]
         print(job_id)
         time.sleep(1)
