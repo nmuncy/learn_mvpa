@@ -20,8 +20,8 @@ def func_one_subj(data_path):
 
     # ## Import data
     # set up
-    mask_subj = os.path.join(
-        data_path, "sub005/masks/orig/Group_Int_Mask.nii.gz")
+    mask_subj = os.path.join(data_path,
+                             "sub005/masks/orig/Group_Int_Mask.nii.gz")
 
     dhandle = mvpa2.datasets.sources.OpenFMRIDataset(data_path)
     dhandle.get_subj_ids()
@@ -113,20 +113,22 @@ def func_one_subj(data_path):
     def get_SVD_sliced(x):
         return ChainMapper([svdmapper, StaticFeatureSelection(x)])
 
-    clfs = [
-        ('All orig.\nfeatures (%i)' % fds_train.nfeatures, Clf()),
-        ('All Comps\n(%i)' % (fds_train.nsamples -
-                              (fds_train.nsamples / len(fds_train.UC)), ),
-         MappedClassifier(Clf(), svdmapper)),
-        ('First 30\nComp.', MappedClassifier(Clf(), get_SVD_sliced(slice(0, 30)))),
-        ('Comp.\n31-60', MappedClassifier(Clf(), get_SVD_sliced(slice(31, 60)))),
-        ('Comp.\n61-90', MappedClassifier(Clf(), get_SVD_sliced(slice(61, 90)))),
-        ('Comp.\n91-120', MappedClassifier(Clf(), get_SVD_sliced(slice(91, 120)))),
-        ('Comp.\n121-150', MappedClassifier(Clf(), get_SVD_sliced(slice(121,
-                                                                        150)))),
-        ('Comp.\n151-180', MappedClassifier(Clf(), get_SVD_sliced(slice(151,
-                                                                        180))))
-    ]
+    clfs = [('All orig.\nfeatures (%i)' % fds_train.nfeatures, Clf()),
+            ('All Comps\n(%i)' % (fds_train.nsamples -
+                                  (fds_train.nsamples / len(fds_train.UC)), ),
+             MappedClassifier(Clf(), svdmapper)),
+            ('First 30\nComp.',
+             MappedClassifier(Clf(), get_SVD_sliced(slice(0, 30)))),
+            ('Comp.\n31-60',
+             MappedClassifier(Clf(), get_SVD_sliced(slice(31, 60)))),
+            ('Comp.\n61-90',
+             MappedClassifier(Clf(), get_SVD_sliced(slice(61, 90)))),
+            ('Comp.\n91-120',
+             MappedClassifier(Clf(), get_SVD_sliced(slice(91, 120)))),
+            ('Comp.\n121-150',
+             MappedClassifier(Clf(), get_SVD_sliced(slice(121, 150)))),
+            ('Comp.\n151-180',
+             MappedClassifier(Clf(), get_SVD_sliced(slice(151, 180))))]
 
     # run and visualize in barplot
     results = []
@@ -142,11 +144,12 @@ def func_one_subj(data_path):
         results.append(res.samples[:, 0])
         labels.append(desc)
 
-    plot_bars(results,
-              labels=labels,
-              title='Linear C-SVM classification (face vs. scene)',
-              ylabel='Mean classification error (N-1 cross-validation, 12-fold)',
-              distance=0.5)
+    plot_bars(
+        results,
+        labels=labels,
+        title='Linear C-SVM classification (face vs. scene)',
+        ylabel='Mean classification error (N-1 cross-validation, 12-fold)',
+        distance=0.5)
 
 
 # %%
@@ -303,7 +306,8 @@ def func_train(hdf5_path, group_path):
     Step 3: Hyperalignment
     """
     # classifier
-    cv = CrossValidation(clf, NFoldPartitioner(attr='subject'),
+    cv = CrossValidation(clf,
+                         NFoldPartitioner(attr='subject'),
                          errorfx=mean_match_accuracy)
 
     bsc_hyper_results = []
@@ -314,8 +318,9 @@ def func_train(hdf5_path, group_path):
 
         anova = OneWayAnova()
         fscores = [anova(sd) for sd in ds_train]
-        featsels = [StaticFeatureSelection(fselector(fscore))
-                    for fscore in fscores]
+        featsels = [
+            StaticFeatureSelection(fselector(fscore)) for fscore in fscores
+        ]
         ds_train_fs = [fs.forward(sd) for fs, sd in zip(featsels, ds_train)]
 
         hyper = Hyperalignment()
@@ -340,16 +345,18 @@ def func_train(hdf5_path, group_path):
             Within-Subject: {} +/- {}
             Between-Subject: {} +/- {}
             Hyper Between-Subject: {} +/- {}
-    """.format(round(np.mean(wsc_results), 2),
-               round(np.std(wsc_results) / np.sqrt(nsubjs - 1), 3),
-               round(np.mean(bsc_results), 2),
-               round(np.std(np.mean(bsc_results, axis=1)) /
-                     np.sqrt(nsubjs - 1), 3),
-               round(np.mean(bsc_hyper_results), 2),
-               round(np.std(np.mean(bsc_hyper_results, axis=1)) / np.sqrt(nsubjs - 1), 3))
+    """.format(
+        round(np.mean(wsc_results), 2),
+        round(np.std(wsc_results) / np.sqrt(nsubjs - 1), 3),
+        round(np.mean(bsc_results), 2),
+        round(np.std(np.mean(bsc_results, axis=1)) / np.sqrt(nsubjs - 1), 3),
+        round(np.mean(bsc_hyper_results), 2),
+        round(
+            np.std(np.mean(bsc_hyper_results, axis=1)) / np.sqrt(nsubjs - 1),
+            3))
 
-    write_out = open(os.path.join(
-        group_path, "mvpa_stats_classifiers.txt"), "w")
+    write_out = open(os.path.join(group_path, "mvpa_stats_classifiers.txt"),
+                     "w")
     write_out.write(h_out)
     write_out.close()
 
@@ -364,17 +371,17 @@ def func_train(hdf5_path, group_path):
     mappers = hyper(ds_fs)
     ds_hyper = [m.forward(ds_) for m, ds_ in zip(mappers, ds_fs)]
 
-    sm_orig = [np.corrcoef(
-        sd.get_mapped(
-            mean_group_sample(['targets'])).samples)
-        for sd in ds_fs]
+    sm_orig = [
+        np.corrcoef(sd.get_mapped(mean_group_sample(['targets'])).samples)
+        for sd in ds_fs
+    ]
     sm_orig_mean = np.mean(sm_orig, axis=0)
 
-    sm_hyper_mean = np.mean(
-        [np.corrcoef(
-            sd.get_mapped(mean_group_sample(['targets'])).samples)
-            for sd in ds_hyper],
-        axis=0)
+    sm_hyper_mean = np.mean([
+        np.corrcoef(sd.get_mapped(mean_group_sample(['targets'])).samples)
+        for sd in ds_hyper
+    ],
+                            axis=0)
 
     ds_hyper = vstack(ds_hyper)
     sm_hyper = np.corrcoef(ds_hyper.get_mapped(mean_group_sample(['targets'])))
@@ -391,7 +398,8 @@ def func_train(hdf5_path, group_path):
     for i, sm_t in enumerate((
         (sm_orig_mean, "Average within-subject\nsimilarity"),
         (sm_anat, "Similarity of group average\ndata (anatomically aligned)"),
-        (sm_hyper_mean, "Average within-subject\nsimilarity (hyperaligned data)"),
+        (sm_hyper_mean,
+         "Average within-subject\nsimilarity (hyperaligned data)"),
         (sm_hyper, "Similarity of group average\ndata (hyperaligned)"),
     )):
         sm, title = sm_t
@@ -402,9 +410,15 @@ def func_train(hdf5_path, group_path):
         pl.colorbar(shrink=.4, ticks=[-1, 0, 1])
         pl.title(title, size=12)
         ylim = pl.ylim()
-        pl.xticks(range(ncats), labels, size='small', stretch='ultra-condensed',
+        pl.xticks(range(ncats),
+                  labels,
+                  size='small',
+                  stretch='ultra-condensed',
                   rotation=45)
-        pl.yticks(range(ncats), labels, size='small', stretch='ultra-condensed',
+        pl.yticks(range(ncats),
+                  labels,
+                  size='small',
+                  stretch='ultra-condensed',
                   rotation=45)
         pl.ylim(ylim)
 
@@ -415,7 +429,7 @@ def func_train(hdf5_path, group_path):
 def main():
 
     # set up
-    h_par_path = sys.argv[0]
+    h_par_path = sys.argv[1]
     # h_par_path = "/Users/nmuncy/Projects/learn_mvpa"
     h_group_path = os.path.join(h_par_path, "grpAnalysis")
     h_data_path = os.path.join(h_par_path, "mvpa")
