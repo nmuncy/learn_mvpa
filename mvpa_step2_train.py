@@ -2,6 +2,13 @@
 Notes
 
 Written for Python 2.7 <-------------!!!
+
+TODO:
+    1) Train for specific categories in block set?
+    2) Verify that I am using separate data for
+        determining hyperalignment parameter and
+        training classifier
+    3) Train on loc phase, test on vCAT phase
 """
 
 # %%
