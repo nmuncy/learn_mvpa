@@ -12,8 +12,8 @@ phase <- args[10]
 # subjStr <- "vCAT_005"
 # dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
 # outDir <- paste0("/Users/nmuncy/Projects/afni_python/",subjStr,"/ses-S1")
-# numRuns <- 4
-# phase <- "task"
+# numRuns <- 2
+# phase <- "loc"
 # run <- 1
 
 
@@ -29,28 +29,53 @@ for(run in 1:numRuns){
   if(phase == "loc"){
 
     # get data
-    data_raw <- read.delim(paste0(dataDir,"/", subjStr, "_", run, "_localizer.csv"), sep = ",")
-
-    # set out files
-    #   3 timing files - for scene, face, and numbers
-    out_scene <- paste0(outDir, "/tf_loc_scene.txt")
-    out_face <- paste0(outDir, "/tf_loc_face.txt")
-    out_num <- paste0(outDir, "/tf_loc_num.txt")
-
-    # determine index, onset for scene, face, integer
-    ind_scene <- grep("scene_img", data_raw$stim)
-    ons_scene <- round(data_raw$StimOnset[ind_scene], 1)
-
-    ind_face <- grep("face_img", data_raw$stim)
-    ons_face <- round(data_raw$StimOnset[ind_face], 1)
-
-    ind_num <- grep("^[0-9]", data_raw$stim)
-    ons_num <- round(data_raw$StimOnset[ind_num], 1)
-
-    # write out
-    cat(ons_scene, "\n", file = out_scene, append = h_ap, sep = "\t")
-    cat(ons_face, "\n", file = out_face, append = h_ap, sep = "\t")
-    cat(ons_num, "\n", file = out_num, append = h_ap, sep = "\t")
+    data_raw <- read.delim(paste0(dataDir,"/", subjStr, "_simp_loc", run, ".csv"), sep = ",")
+    
+    # get indices
+    ind_face <- grep("face_img", data_raw$stim_img)
+    ind_scene <- grep("scene_img", data_raw$stim_img)
+    ind_num <- grep("^[0-9]", data_raw$stim_img)
+    
+    # determine block lengths
+    for(stim in c("face", "scene", "num")){
+      
+      h_ind <- get(paste0("ind_",stim))
+      
+      h_block_end <- vector()
+      h_block_start <- vector()
+      for(i in 1:length(h_ind)){
+        
+        # get start
+        if(i == 1){
+          h_block_start <- c(h_block_start, h_ind[i])
+        }
+        
+        # find break points
+        if(h_ind[i]+1 <= range(h_ind)[2]){
+          if(h_ind[i+1] > h_ind[i]+1){
+            h_block_end <- c(h_block_end, h_ind[i])
+            h_block_start <- c(h_block_start, h_ind[i+1])
+          }
+        }else{
+          # get end
+          h_block_end <- c(h_block_end, h_ind[i])
+        }
+      }
+      
+      # make row - marry onset, duration
+      if(length(h_block_end) == length(h_block_start)){
+        row_input <- vector()
+        for(i in 1:length(h_block_start)){
+          val_start <- round(as.numeric(data_raw$onset[h_block_start[i]]),1)
+          val_dur <- round(as.numeric(data_raw$onset[h_block_end[i]]) - as.numeric(data_raw$onset[h_block_start[i]]), 1)
+          row_input <- c(row_input, paste0(val_start,":",val_dur))
+        }
+      }
+      
+      # write
+      out_file <- paste0(outDir, "/tf_loc_", stim,".txt")
+      cat(row_input, "\n", file = out_file, append = h_ap, sep = "\t")
+    }
   }
 
   if(phase == "task"){
@@ -81,42 +106,61 @@ for(run in 1:numRuns){
       }
 
       # fill vectors
-      #   get previous vector
-      #   assign (append) new, rounded value
+      #   event = actual trial, precede = trial preceding event
       for(i in ind_hold){
+
+        # account for end of file
+        #   if last trial is cond, hardcode duration (2.3s)
+        if(is.na(data_raw$onset[i+1])==F){
+          h_ons_next <- round(data_raw$onset[i+1], 1)
+        }else{
+          h_ons_next < round(data_raw$onset[i] + 2.3, 1)
+        }
+        
+        # calc onset:dur for event
+        #   exclude feedback time (0.5s) and ISI (0.6s)
+        hold_event_onset <- round(data_raw$onset[i],1)
+        hold_event_dur <- round(h_ons_next - hold_event_onset - 1.1, 1)
+        hold_event_marry <- paste0(hold_event_onset,":",hold_event_dur)
+        
+        # calc onset:dur for precede
+        hold_prec_onset <- round(data_raw$onset[i-1],1)
+        hold_prec_dur <- round(h_ons_next - hold_prec_onset, 1)
+        hold_prec_marry <- paste0(hold_prec_onset,":",hold_prec_dur)
+        
+        # control for scene/face, response, accuracy
         if(data_raw$stim[i-1] == "face1" || data_raw$stim[i-1] == "face2"){
           if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 1){
-
+          
+            # append event row
             hold_event <- get(paste0("ons_",type,"_face_event_cor"))
-            assign(paste0("ons_",type,"_face_event_cor"), c(hold_event, round(data_raw$onset[i],1)))
+            assign(paste0("ons_",type,"_face_event_cor"), c(hold_event, hold_event_marry))
 
+            # append prec row
             hold_prec <- get(paste0("ons_",type,"_face_prec_cor"))
-            assign(paste0("ons_",type,"_face_prec_cor"), c(hold_prec, round(data_raw$onset[i-1],1)))
+            assign(paste0("ons_",type,"_face_prec_cor"), c(hold_prec, hold_prec_marry))
 
           }else if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 0){
 
             hold_event <- get(paste0("ons_",type,"_face_event_icor"))
-            assign(paste0("ons_",type,"_face_event_icor"), c(hold_event, round(data_raw$onset[i],1)))
-
+            assign(paste0("ons_",type,"_face_event_icor"), c(hold_event, hold_event_marry))
             hold_prec <- get(paste0("ons_",type,"_face_prec_icor"))
-            assign(paste0("ons_",type,"_face_prec_icor"), c(hold_prec, round(data_raw$onset[i-1],1)))
+            assign(paste0("ons_",type,"_face_prec_icor"), c(hold_prec, hold_prec_marry))
           }
         }else if(data_raw$stim[i-1] == "scene1" || data_raw$stim[i-1] == "scene2"){
           if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 1){
 
             hold_event <- get(paste0("ons_",type,"_scene_event_cor"))
-            assign(paste0("ons_",type,"_scene_event_cor"), c(hold_event, round(data_raw$onset[i],1)))
-
+            assign(paste0("ons_",type,"_scene_event_cor"), c(hold_event, hold_event_marry))
             hold_prec <- get(paste0("ons_",type,"_scene_prec_cor"))
-            assign(paste0("ons_",type,"_scene_prec_cor"), c(hold_prec, round(data_raw$onset[i-1],1)))
+            assign(paste0("ons_",type,"_scene_prec_cor"), c(hold_prec, hold_prec_marry))
 
           }else if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 0){
 
             hold_event <- get(paste0("ons_",type,"_scene_event_icor"))
-            assign(paste0("ons_",type,"_scene_event_icor"), c(hold_event, round(data_raw$onset[i],1)))
-
+            assign(paste0("ons_",type,"_scene_event_icor"), c(hold_event, hold_event_marry))
             hold_prec <- get(paste0("ons_",type,"_scene_prec_icor"))
-            assign(paste0("ons_",type,"_scene_prec_icor"), c(hold_prec, round(data_raw$onset[i-1],1)))
+            assign(paste0("ons_",type,"_scene_prec_icor"), c(hold_prec, hold_prec_marry))
           }
         }
       }
