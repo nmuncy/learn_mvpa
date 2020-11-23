@@ -4,7 +4,7 @@ module load r-3.5.1-gcc-8.2.0-djzshna
 
 behavDir=/home/data/madlab/Mattfeld_vCAT/behav
 derivDir=/scratch/madlab/nate_vCAT/derivatives
-codeDir=~/compute/afni_python
+codeDir=~/compute/learn_mvpa
 phaseArr=("loc" "task")
 runArr=(2 4)
 
