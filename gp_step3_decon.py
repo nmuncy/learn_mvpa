@@ -4,7 +4,7 @@ Notes
 Timing files must be named "tf_phase_behavior.txt"
     e.g. tf_vCAT_Hit.txt, or tf_test_FA.txt
 
-If using dmBLOCK option, duration should be married
+If using dmBLOCK or TENT options, duration should be married
     to start time.
 
 Decon base models = GAM, 2GAM, dmBLOCK, TENT
@@ -18,11 +18,13 @@ TODO:
 # %%
 import os
 import fnmatch
+import subprocess
+import re
 from argparse import ArgumentParser
 from gp_step0_dcm2nii import func_sbatch
 
 
-def func_decon(run_files, mot_files, tf_dict, cen_file, h_str, h_type):
+def func_decon(run_files, mot_files, tf_dict, cen_file, h_str, h_type, work_dir):
 
     in_files = ""
     for fil in run_files:
@@ -32,22 +34,45 @@ def func_decon(run_files, mot_files, tf_dict, cen_file, h_str, h_type):
     for c, mot in enumerate(mot_files):
         reg_base += f"-ortvec {mot} mot_demean_run{c+1} "
 
+    h_cmd = f"module load afni-20.2.06 \n 3dinfo -tr {work_dir}/{run_files[0]}"
+    h_tr = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+    h_len_tr = h_tr.communicate()[0]
+    len_tr = float(h_len_tr.decode("utf-8").strip())
+
     reg_beh = ""
     for c_beh, beh in enumerate(tf_dict):
         if h_type == "dmBLOCK":
             reg_beh += f'-stim_times_AM1 {c_beh + 1} {tf_dict[beh]} "dmBLOCK(1)" -stim_label {c_beh + 1} {beh} '
+
         elif h_type == "GAM":
             reg_beh += f'-stim_times {c_beh + 1} {tf_dict[beh]} "GAM" -stim_label {c_beh + 1} {beh} '
+
         elif h_type == "2GAM":
             reg_beh += f'-stim_times {c_beh + 1} {tf_dict[beh]} "TWOGAMpw(4,5,0.2,12,7)" -stim_label {c_beh + 1} {beh} '
+
         elif h_type == "TENT":
-            if h_str == "loc":
-                h_int = 22  # TODO update
-            elif h_str == "Study":
-                h_int = 3  # TODO update
-            tent_len = round(12 + h_int)
-            tent = f"TENT(0,{tent_len},{round(tent_len / 1.76)}"
-            reg_beh += f"-stim_times {c_beh + 1} {tf_dict[beh]} {tent} -stim_label {c_beh + 1} {beh} "
+
+            # extract duration, account for no behavior in 1st run
+            tmp_str = tf_dict[beh].replace("tf", "dur")
+            txt_file = open(os.path.join(work_dir, tmp_str)).readlines()
+            # h_num = float(txt_file[0].split(":")[1].split("\t")[0])
+
+            if "*" in txt_file[0]:
+                h_num = txt_file[0].split("\n")[0]
+            else:
+                h_num = txt_file[0].split("\t")[0]
+
+            if h_num != "*":
+                tent_len = round(12 + float(h_num))
+            else:
+                with open(os.path.join(work_dir, tmp_str)) as f:
+                    for line in f:
+                        s = re.search(r"\d+", line)
+                        if s:
+                            tmp_num = s.string.split("\t")[0]
+                tent_len = round(12 + float(tmp_num))
+
+            reg_beh += f"-stim_times {c_beh + 1} {tf_dict[beh]} 'TENT(0,{tent_len},{round(tent_len / len_tr)})' -stim_label {c_beh + 1} {beh} "
 
     h_out = f"{h_str}_{h_type}"
 
@@ -70,6 +95,7 @@ def func_decon(run_files, mot_files, tf_dict, cen_file, h_str, h_type):
             -cbucket {h_out}_cbucket \\
             -errts {h_out}_errts
     """
+    print(cmd_decon)
     return cmd_decon
 
 
@@ -88,11 +114,11 @@ def func_argparser():
 def func_job(phase, decon_type, work_dir, sub_num):
 
     # # For testing
-    # subj = "sub-006"
+    # subj = "sub-005"
     # sess = "ses-S1"
-    # phase = "vCAT"
-    # decon_type = "GAM"
-    # sub_num = "006"
+    # phase = "Study"
+    # decon_type = "TENT"
+    # sub_num = "005"
 
     # par_dir = "/scratch/madlab/nate_vCAT"
     # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
@@ -179,8 +205,7 @@ def func_job(phase, decon_type, work_dir, sub_num):
     # make timing file dictionary
     tf_dict = {}
     for i in tf_list:
-        tmp = i.split("_")[-1]
-        beh = tmp.split(".")[0]
+        beh = i.split("_")[-1].split(".")[0]
         tf_dict[beh] = i
 
     # write decon script, generate matrices and REML_cmd
@@ -194,9 +219,11 @@ def func_job(phase, decon_type, work_dir, sub_num):
                 f"censor_{phase}_combined.1D",
                 phase,
                 decon_type,
+                work_dir,
             )
         )
 
+    # %%
     # run decon script to generate matrices
     if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{decon_type}.xmat.1D")):
         h_cmd = f"cd {work_dir} \n source {decon_script}"
@@ -207,6 +234,7 @@ def func_job(phase, decon_type, work_dir, sub_num):
         print(f"Step 2 failed to produce X.{phase}_{decon_type}.xmat.1D. Exiting.")
         exit
 
+    # %%
     # generate WM timeseries
     if not os.path.exists(os.path.join(work_dir, f"{phase}_WMe_rall+tlrc.HEAD")):
         h_cmd = f"""
