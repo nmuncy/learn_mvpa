@@ -8,12 +8,16 @@ numRuns <- args[9]
 phase <- args[10]
 
 
+# Update:
+#   Divorce, make separate duration files
+
+
 # # For testing
 # subjStr <- "vCAT_005"
 # dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
 # outDir <- paste0("/Users/nmuncy/Projects/afni_python/",subjStr,"/ses-S1")
-# numRuns <- 2
-# phase <- "loc"
+# numRuns <- 4
+# phase <- "task"
 # run <- 1
 
 
@@ -65,16 +69,21 @@ for(run in 1:numRuns){
       # make row - marry onset, duration
       if(length(h_block_end) == length(h_block_start)){
         row_input <- vector()
+        val_input <- vector()
         for(i in 1:length(h_block_start)){
           val_start <- round(as.numeric(data_raw$onset[h_block_start[i]]),1)
           val_dur <- round(as.numeric(data_raw$onset[h_block_end[i]]) - as.numeric(data_raw$onset[h_block_start[i]]), 1)
-          row_input <- c(row_input, paste0(val_start,":",val_dur))
+          # row_input <- c(row_input, paste0(val_start,":",val_dur))
+          row_input <- c(row_input, val_start)
+          val_input <- c(val_input, val_dur)
         }
       }
       
       # write
       out_file <- paste0(outDir, "/tf_loc_", stim,".txt")
       cat(row_input, "\n", file = out_file, append = h_ap, sep = "\t")
+      out_dur <- paste0(outDir, "/dur_loc_", stim,".txt")
+      cat(val_input, "\n", file = out_dur, append = h_ap, sep = "\t")
     }
   }
 
@@ -101,6 +110,7 @@ for(run in 1:numRuns){
         for(j in c("prec", "event")){
           for(k in c("cor", "icor")){
             assign(paste0("ons_",type,"_",i,"_",j,"_",k), vector())
+            assign(paste0("dur_",type,"_",i,"_",j,"_",k), vector())
           }
         }
       }
@@ -121,46 +131,83 @@ for(run in 1:numRuns){
         #   exclude feedback time (0.5s) and ISI (0.6s)
         hold_event_onset <- round(data_raw$onset[i],1)
         hold_event_dur <- round(h_ons_next - hold_event_onset - 1.1, 1)
-        hold_event_marry <- paste0(hold_event_onset,":",hold_event_dur)
+        # hold_event_marry <- paste0(hold_event_onset,":",hold_event_dur)
         
         # calc onset:dur for precede
         hold_prec_onset <- round(data_raw$onset[i-1],1)
         hold_prec_dur <- round(h_ons_next - hold_prec_onset, 1)
-        hold_prec_marry <- paste0(hold_prec_onset,":",hold_prec_dur)
+        # hold_prec_marry <- paste0(hold_prec_onset,":",hold_prec_dur)
         
         # control for scene/face, response, accuracy
         if(data_raw$stim[i-1] == "face1" || data_raw$stim[i-1] == "face2"){
           if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 1){
           
-            # append event row
+            # append event row onset
             hold_event <- get(paste0("ons_",type,"_face_event_cor"))
-            assign(paste0("ons_",type,"_face_event_cor"), c(hold_event, hold_event_marry))
+            # assign(paste0("ons_",type,"_face_event_cor"), c(hold_event, hold_event_marry))
+            assign(paste0("ons_",type,"_face_event_cor"), c(hold_event, hold_event_onset))
+            
+            # append event row duration
+            hold_edur <- get(paste0("dur_",type,"_face_event_cor"))
+            assign(paste0("dur_",type,"_face_event_cor"), c(hold_edur, hold_event_dur))
 
-            # append prec row
+            # append prec row onset
             hold_prec <- get(paste0("ons_",type,"_face_prec_cor"))
-            assign(paste0("ons_",type,"_face_prec_cor"), c(hold_prec, hold_prec_marry))
+            # assign(paste0("ons_",type,"_face_prec_cor"), c(hold_prec, hold_prec_marry))
+            assign(paste0("ons_",type,"_face_prec_cor"), c(hold_prec, hold_prec_onset))
+            
+            # append prec row duration
+            hold_pdur <- get(paste0("dur_",type,"_face_prec_cor"))
+            assign(paste0("dur_",type,"_face_event_cor"), c(hold_pdur, hold_prec_dur))
 
           }else if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 0){
 
+            # onset
             hold_event <- get(paste0("ons_",type,"_face_event_icor"))
-            assign(paste0("ons_",type,"_face_event_icor"), c(hold_event, hold_event_marry))
+            # assign(paste0("ons_",type,"_face_event_icor"), c(hold_event, hold_event_marry))
+            assign(paste0("ons_",type,"_face_event_icor"), c(hold_event, hold_event_onset))
             hold_prec <- get(paste0("ons_",type,"_face_prec_icor"))
-            assign(paste0("ons_",type,"_face_prec_icor"), c(hold_prec, hold_prec_marry))
+            # assign(paste0("ons_",type,"_face_prec_icor"), c(hold_prec, hold_prec_marry))
+            assign(paste0("ons_",type,"_face_prec_icor"), c(hold_prec, hold_prec_onset))
+            
+            # duration
+            hold_edur <- get(paste0("dur_",type,"_face_event_icor"))
+            assign(paste0("dur_",type,"_face_event_icor"), c(hold_edur, hold_event_dur))
+            hold_pdur <- get(paste0("dur_",type,"_face_prec_icor"))
+            assign(paste0("dur_",type,"_face_prec_icor"), c(hold_pdur, hold_prec_dur))
           }
         }else if(data_raw$stim[i-1] == "scene1" || data_raw$stim[i-1] == "scene2"){
           if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 1){
 
+            # onset
             hold_event <- get(paste0("ons_",type,"_scene_event_cor"))
-            assign(paste0("ons_",type,"_scene_event_cor"), c(hold_event, hold_event_marry))
+            # assign(paste0("ons_",type,"_scene_event_cor"), c(hold_event, hold_event_marry))
+            assign(paste0("ons_",type,"_scene_event_cor"), c(hold_event, hold_event_onset))
             hold_prec <- get(paste0("ons_",type,"_scene_prec_cor"))
-            assign(paste0("ons_",type,"_scene_prec_cor"), c(hold_prec, hold_prec_marry))
+            # assign(paste0("ons_",type,"_scene_prec_cor"), c(hold_prec, hold_prec_marry))
+            assign(paste0("ons_",type,"_scene_prec_cor"), c(hold_prec, hold_prec_onset))
+            
+            # duration
+            hold_edur <- get(paste0("dur_",type,"_scene_event_cor"))
+            assign(paste0("dur_",type,"_scene_event_cor"), c(hold_edur, hold_event_dur))
+            hold_pdur <- get(paste0("dur_",type,"_scene_prec_cor"))
+            assign(paste0("dur_",type,"_scene_prec_cor"), c(hold_pdur, hold_prec_dur))
 
           }else if(data_raw$resp[i-1] != "None" && data_raw$acc[i-1] == 0){
 
+            # onset
             hold_event <- get(paste0("ons_",type,"_scene_event_icor"))
-            assign(paste0("ons_",type,"_scene_event_icor"), c(hold_event, hold_event_marry))
+            # assign(paste0("ons_",type,"_scene_event_icor"), c(hold_event, hold_event_marry))
+            assign(paste0("ons_",type,"_scene_event_icor"), c(hold_event, hold_event_onset))
             hold_prec <- get(paste0("ons_",type,"_scene_prec_icor"))
-            assign(paste0("ons_",type,"_scene_prec_icor"), c(hold_prec, hold_prec_marry))
+            # assign(paste0("ons_",type,"_scene_prec_icor"), c(hold_prec, hold_prec_marry))
+            assign(paste0("ons_",type,"_scene_prec_icor"), c(hold_prec, hold_prec_onset))
+            
+            # duration
+            hold_edur <- get(paste0("dur_",type,"_scene_event_icor"))
+            assign(paste0("dur_",type,"_scene_event_icor"), c(hold_edur, hold_event_dur))
+            hold_pdur <- get(paste0("dur_",type,"_scene_prec_icor"))
+            assign(paste0("dur_",type,"_scene_prec_icor"), c(hold_pdur, hold_prec_dur))
           }
         }
       }
@@ -170,11 +217,14 @@ for(run in 1:numRuns){
         for(j in c("prec", "event")){
           for(k in c("cor", "icor")){
             hold_out <- get(paste0("ons_",type,"_",i,"_",j,"_",k))
+            hold_dur <- get(paste0("dur_",type,"_",i,"_",j,"_",k))
             if(length(hold_out) == 0){
               hold_out <- "*"
             }
             out_file <- paste0(outDir, "/tf_Study_", substr(type,1,1), substr(i,1,1), substr(j,1,1), substr(k,1,1),".txt")
             cat(hold_out, "\n", file = out_file, append = h_ap, sep = "\t")
+            out_dur <- paste0(outDir, "/dur_Study_", substr(type,1,1), substr(i,1,1), substr(j,1,1), substr(k,1,1),".txt")
+            cat(hold_dur, "\n", file = out_dur, append = h_ap, sep = "\t")
           }
         }
       }
