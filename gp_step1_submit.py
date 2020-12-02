@@ -18,7 +18,7 @@ import time
 import fnmatch
 
 # set up
-code_dir = "/home/nmuncy/compute/afni_python"
+code_dir = "/home/nmuncy/compute/learn_mvpa"
 parent_dir = "/scratch/madlab/nate_vCAT"
 sess_list = ["ses-S1"]
 phase_list = ["loc", "Study"]

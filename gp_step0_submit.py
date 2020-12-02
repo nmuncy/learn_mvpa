@@ -15,7 +15,7 @@ import time
 import json
 
 # set up
-code_dir = "/home/nmuncy/compute/afni_python"
+code_dir = "/home/nmuncy/compute/learn_mvpa"
 tar_dir = "/home/data/madlab/Mattfeld_vCAT/sourcedata"
 work_dir = "/scratch/madlab/nate_vCAT"
 scan_dict = {"func": ["Study", "loc"], "anat": "T1w", "fmap": "Dist"}

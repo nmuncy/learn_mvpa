@@ -20,11 +20,14 @@ import os
 import fnmatch
 import subprocess
 import re
+import json
 from argparse import ArgumentParser
 from gp_step0_dcm2nii import func_sbatch
 
 
-def func_decon(run_files, mot_files, tf_dict, cen_file, h_str, h_type, work_dir):
+def func_decon(
+    run_files, mot_files, tf_dict, cen_file, h_phase, h_type, h_desc, work_dir
+):
 
     in_files = ""
     for fil in run_files:
@@ -74,11 +77,12 @@ def func_decon(run_files, mot_files, tf_dict, cen_file, h_str, h_type, work_dir)
 
             reg_beh += f"-stim_times {c_beh + 1} {tf_dict[beh]} 'TENT(0,{tent_len},{round(tent_len / len_tr)})' -stim_label {c_beh + 1} {beh} "
 
-    h_out = f"{h_str}_{h_type}"
+    h_out = f"{h_phase}_{h_desc}"
 
     cmd_decon = f"""
         3dDeconvolve \\
             -x1D_stop \\
+            -GOFORIT \\
             -input {in_files} \\
             -censor {cen_file} \\
             {reg_base} \\
@@ -99,19 +103,8 @@ def func_decon(run_files, mot_files, tf_dict, cen_file, h_str, h_type, work_dir)
     return cmd_decon
 
 
-# receive arguments
-def func_argparser():
-    parser = ArgumentParser("Receive Bash args from wrapper")
-    parser.add_argument("h_sub", help="Subject ID")
-    parser.add_argument("h_ses", help="Session")
-    parser.add_argument("h_dct", help="Decon Type")
-    parser.add_argument("h_der", help="Derivatives Directory")
-    parser.add_argument("h_phl", nargs="+", help="Phase List")
-    return parser
-
-
 # %%
-def func_job(phase, decon_type, work_dir, sub_num):
+def func_job(phase, decon_type, work_dir, sub_num, time_files):
 
     # # For testing
     # subj = "sub-005"
@@ -119,9 +112,10 @@ def func_job(phase, decon_type, work_dir, sub_num):
     # phase = "Study"
     # decon_type = "TENT"
     # sub_num = "005"
-
     # par_dir = "/scratch/madlab/nate_vCAT"
     # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+    # time_files = {}
+
     """
     Step 1: Make motion regressors
 
@@ -186,6 +180,8 @@ def func_job(phase, decon_type, work_dir, sub_num):
     Deconvolve script written for review.
 
     Base models include pmBLOCK, GAM, and TWOGAMpw.
+
+    TODO deconvolve for Bp, Be, cp, ce individually for Study
     """
 
     # Get motion files
@@ -196,43 +192,77 @@ def func_job(phase, decon_type, work_dir, sub_num):
     ]
     mot_list.sort()
 
-    # Get timing files - all are named tf_phase_beh.txt
-    #   e.g. tf_vCAT_hit.txt
-    tf_list = [
-        x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"tf_{phase}*.txt")
-    ]
+    # # Get timing files - all are named tf_phase_beh.txt
+    # #   e.g. tf_vCAT_hit.txt
+    # tf_list = [x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"tf_{phase}*.txt")]
+    # tf_list.sort()
 
-    # make timing file dictionary
-    tf_dict = {}
-    for i in tf_list:
-        beh = i.split("_")[-1].split(".")[0]
-        tf_dict[beh] = i
+    if type(time_files) == list:
 
-    # write decon script, generate matrices and REML_cmd
-    decon_script = os.path.join(work_dir, f"decon_{phase}_{decon_type}.sh")
-    with open(decon_script, "w") as script:
-        script.write(
-            func_decon(
-                run_list,
-                mot_list,
-                tf_dict,
-                f"censor_{phase}_combined.1D",
-                phase,
-                decon_type,
-                work_dir,
+        desc = "decon"
+
+        # make timing file dictionary
+        tf_dict = {}
+        for i in time_files:
+            beh = i.split("_")[-1].split(".")[0]
+            tf_dict[beh] = i
+
+        # write decon script, generate matrices and REML_cmd
+        decon_script = os.path.join(work_dir, f"decon_{phase}.sh")
+        with open(decon_script, "w") as script:
+            script.write(
+                func_decon(
+                    run_list,
+                    mot_list,
+                    tf_dict,
+                    f"censor_{phase}_combined.1D",
+                    phase,
+                    decon_type,
+                    desc,
+                    work_dir,
+                )
             )
-        )
 
-    # %%
-    # run decon script to generate matrices
-    if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{decon_type}.xmat.1D")):
-        h_cmd = f"cd {work_dir} \n source {decon_script}"
-        func_sbatch(h_cmd, 1, 1, 1, f"{sub_num}dcn", work_dir)
+        # run decon script to generate matrices
+        if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{desc}.xmat.1D")):
+            h_cmd = f"cd {work_dir} \n source {decon_script}"
+            func_sbatch(h_cmd, 1, 1, 1, f"{sub_num}dcn", work_dir)
 
-    # check
-    if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{decon_type}.xmat.1D")):
-        print(f"Step 2 failed to produce X.{phase}_{decon_type}.xmat.1D. Exiting.")
-        exit
+        # check
+        if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{desc}.xmat.1D")):
+            print(f"Step 2 failed to produce X.{phase}_{desc}.xmat.1D. Exiting.")
+            exit
+
+    elif type(time_files) == dict:
+        for desc in time_files:
+
+            tf_dict = {}
+            for i in time_files[desc]:
+                beh = i.split("_")[-1].split(".")[0]
+                tf_dict[beh] = i
+
+            decon_script = os.path.join(work_dir, f"decon_{phase}_{desc}.sh")
+            with open(decon_script, "w") as script:
+                script.write(
+                    func_decon(
+                        run_list,
+                        mot_list,
+                        tf_dict,
+                        f"censor_{phase}_combined.1D",
+                        phase,
+                        decon_type,
+                        desc,
+                        work_dir,
+                    )
+                )
+
+            if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{desc}.xmat.1D")):
+                h_cmd = f"cd {work_dir} \n source {decon_script}"
+                func_sbatch(h_cmd, 1, 1, 1, f"{sub_num}dcn", work_dir)
+
+            if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{desc}.xmat.1D")):
+                print(f"Step 2 failed to produce X.{phase}_{desc}.xmat.1D. Exiting.")
+                exit
 
     # %%
     # generate WM timeseries
@@ -247,22 +277,52 @@ def func_job(phase, decon_type, work_dir, sub_num):
         func_sbatch(h_cmd, 1, 4, 1, f"{sub_num}wts", work_dir)
 
     # run REML
-    if not os.path.exists(
-        os.path.join(work_dir, f"{phase}_{decon_type}_stats_REML+tlrc.HEAD")
-    ):
-        h_cmd = f"cd {work_dir} \n tcsh -x {phase}_{decon_type}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc"
-        func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
+    if type(time_files) == list:
+        desc = "decon"
+        if not os.path.exists(
+            os.path.join(work_dir, f"{phase}_{desc}_stats_REML+tlrc.HEAD")
+        ):
+            h_cmd = f"cd {work_dir} \n tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc"
+            func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
+    elif type(time_files) == dict:
+        for desc in time_files:
+            if not os.path.exists(
+                os.path.join(work_dir, f"{phase}_{desc}_stats_REML+tlrc.HEAD")
+            ):
+                h_cmd = f"cd {work_dir} \n tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc"
+                func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
+
+
+# receive arguments
+# parser.add_argument("h_phl", nargs="+", help="Phase List")
+def func_argparser():
+    parser = ArgumentParser("Receive Bash args from wrapper")
+    parser.add_argument("pars_subj", help="Subject ID")
+    parser.add_argument("pars_sess", help="Session")
+    parser.add_argument("pars_type", help="Decon Type")
+    parser.add_argument("pars_dir", help="Derivatives Directory")
+    return parser
 
 
 def main():
 
     args = func_argparser().parse_args()
-    h_work_dir = os.path.join(args.h_der, args.h_sub, args.h_ses)
-    h_sub_num = args.h_sub.split("-")[1]
+    main_work_dir = os.path.join(args.pars_dir, args.pars_subj, args.pars_sess)
+    main_sub_num = args.pars_subj.split("-")[1]
 
-    for h_phase in args.h_phl:
-        # print(h_phase, args.h_dct, h_work_dir, h_sub_num)
-        func_job(h_phase, args.h_dct, h_work_dir, h_sub_num)
+    # get time dict
+    with open(os.path.join(main_work_dir, "decon_dict.json")) as json_file:
+        decon_dict = json.load(json_file)
+
+    # submit job for each phase
+    for main_phase in decon_dict:
+        func_job(
+            main_phase,
+            args.pars_type,
+            main_work_dir,
+            main_sub_num,
+            decon_dict[main_phase],
+        )
 
 
 if __name__ == "__main__":
