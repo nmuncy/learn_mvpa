@@ -28,7 +28,7 @@ for i in vCAT*; do
 
 	if [ -d $outDir ]; then
 		for j in ${!phaseArr[@]}; do
-			Rscript ${codeDir}/gp_step2_timingFiles_vCAT.R $dataDir $outDir $i ${runArr[$j]} ${phaseArr[$j]}
+			Rscript ${codeDir}/gp_step2_timingFiles.R $dataDir $outDir $i ${runArr[$j]} ${phaseArr[$j]}
 		done
 	fi
 done
