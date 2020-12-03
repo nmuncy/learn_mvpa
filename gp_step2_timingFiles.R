@@ -1,31 +1,30 @@
 
 
-# args <- commandArgs()
-# dataDir <- args[6]
-# outDir <- args[7]
-# subjStr <- args[8]
-# numRuns <- args[9]
-# phase <- args[10]
+# Get args from wrapper
+args <- commandArgs()
+dataDir <- args[6]
+outDir <- args[7]
+subjStr <- args[8]
+numRuns <- args[9]
+phase <- args[10]
 
 
-# Update 1:
-#   Divorce timing files, write separate duration
-
-# Update2:
-#   Drop accuracy from BL
-#   Make tf "F"
-
-# For testing
-subjStr <- "vCAT_005"
-dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
-outDir <- paste0("/Users/nmuncy/Projects/afni_python/",subjStr,"/ses-S1")
-numRuns <- 4
-phase <- "task"
-run <- 1
-type <- "BL"
-ind <- 14
+# # For testing
+# subjStr <- "vCAT_005"
+# dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
+# outDir <- paste0("/Users/nmuncy/Projects/afni_python/",subjStr,"/ses-S1")
+# numRuns <- 4
+# phase <- "task"
+# run <- 1
+# type <- "cond"
+# ind <- 4
 
 
+# ENI duration
+end_dur <- 0.7
+
+
+# Do it
 for(run in 1:numRuns){
 
   # determine append
@@ -115,8 +114,14 @@ for(run in 1:numRuns){
         for(j in c("prec", "event")){
           if(type == "cond"){
             for(k in c("cor", "icor")){
+              
               assign(paste0("ons_",type,"_",i,"_",j,"_",k), vector())
               assign(paste0("dur_",type,"_",i,"_",j,"_",k), vector())
+              
+              if(j == "prec"){
+                assign(paste0("ons_fixed_",i,"_",j,"_",k), vector())
+                assign(paste0("dur_fixed_",i,"_",j,"_",k), vector())
+              }
             }
           }else{
             assign(paste0("ons_",type,"_",i,"_",j), vector())
@@ -140,13 +145,17 @@ for(run in 1:numRuns){
         # calc onset:dur for event
         #   exclude feedback time (0.5s) and ISI (0.6s)
         hold_event_onset <- round(data_raw$onset[ind],1)
-        hold_event_dur <- round(h_ons_next - hold_event_onset - 1.1, 1)
+        hold_event_dur <- round(h_ons_next - hold_event_onset - end_dur, 1)
         # hold_event_marry <- paste0(hold_event_onset,":",hold_event_dur)
 
         # calc onset:dur for precede
         hold_prec_onset <- round(data_raw$onset[ind-1],1)
         hold_prec_dur <- round(h_ons_next - hold_prec_onset, 1)
-        # hold_prec_marry <- paste0(hold_prec_onset,":",hold_prec_dur)
+
+        # calc onset:dur for fixed
+        #   exclude feedback time
+        hold_fixed_onset <- round(data_raw$onset[ind-1],1)
+        hold_fixed_dur <- round(hold_event_onset - hold_fixed_onset - end_dur, 1)
         
         # control response
         if(data_raw$resp[ind-1] != "None"){
@@ -161,24 +170,27 @@ for(run in 1:numRuns){
               # control for accuracy
               if(data_raw$acc[ind-1] == 1){
                 
-                # append event row onset
+                # dynamically append event row onset
                 hold_event <- get(paste0("ons_",type,"_face_event_cor"))
                 # assign(paste0("ons_",type,"_face_event_cor"), c(hold_event, hold_event_marry))
                 assign(paste0("ons_",type,"_face_event_cor"), c(hold_event, hold_event_onset))
                 
-                # append event row duration
+                # dynamically append event row duration
                 hold_edur <- get(paste0("dur_",type,"_face_event_cor"))
                 assign(paste0("dur_",type,"_face_event_cor"), c(hold_edur, hold_event_dur))
                 
-                # append prec row onset
+                # dynamically append prec row onset
                 hold_prec <- get(paste0("ons_",type,"_face_prec_cor"))
-                # assign(paste0("ons_",type,"_face_prec_cor"), c(hold_prec, hold_prec_marry))
                 assign(paste0("ons_",type,"_face_prec_cor"), c(hold_prec, hold_prec_onset))
                 
-                # append prec row duration
+                # dynamically append prec row duration
                 hold_pdur <- get(paste0("dur_",type,"_face_prec_cor"))
                 assign(paste0("dur_",type,"_face_prec_cor"), c(hold_pdur, hold_prec_dur))
                 
+                # append fixed onset, duration
+                ons_fixed_face_prec_cor <- c(ons_fixed_face_prec_cor, hold_fixed_onset)
+                dur_fixed_face_prec_cor <- c(dur_fixed_face_prec_cor, hold_fixed_dur)
+
               }else{
                 
                 # onset (prec, cond)
@@ -192,6 +204,10 @@ for(run in 1:numRuns){
                 assign(paste0("dur_",type,"_face_event_icor"), c(hold_edur, hold_event_dur))
                 hold_pdur <- get(paste0("dur_",type,"_face_prec_icor"))
                 assign(paste0("dur_",type,"_face_prec_icor"), c(hold_pdur, hold_prec_dur))
+                
+                # fixed onset, duration
+                ons_fixed_face_prec_icor <- c(ons_fixed_face_prec_icor, hold_fixed_onset)
+                dur_fixed_face_prec_icor <- c(dur_fixed_face_prec_icor, hold_fixed_dur)
               }
               
             }else if(data_raw$stim[ind-1] == "scene1" || data_raw$stim[ind-1] == "scene2"){
@@ -209,6 +225,10 @@ for(run in 1:numRuns){
                 hold_pdur <- get(paste0("dur_",type,"_scene_prec_cor"))
                 assign(paste0("dur_",type,"_scene_prec_cor"), c(hold_pdur, hold_prec_dur))
                 
+                # fixed onset, duration
+                ons_fixed_scene_prec_cor <- c(ons_fixed_scene_prec_cor, hold_fixed_onset)
+                dur_fixed_scene_prec_cor <- c(dur_fixed_scene_prec_cor, hold_fixed_dur)
+                
               }else{
                 
                 # onset
@@ -222,6 +242,10 @@ for(run in 1:numRuns){
                 assign(paste0("dur_",type,"_scene_event_icor"), c(hold_edur, hold_event_dur))
                 hold_pdur <- get(paste0("dur_",type,"_scene_prec_icor"))
                 assign(paste0("dur_",type,"_scene_prec_icor"), c(hold_pdur, hold_prec_dur))
+                
+                # fixed onset, duration
+                ons_fixed_scene_prec_icor <- c(ons_fixed_scene_prec_icor, hold_fixed_onset)
+                dur_fixed_scene_prec_icor <- c(dur_fixed_scene_prec_icor, hold_fixed_dur)
               }
             }
             
@@ -283,6 +307,23 @@ for(run in 1:numRuns){
               cat(hold_out, "\n", file = out_file, append = h_ap, sep = "\t")
               out_dur <- paste0(outDir, "/dur_Study_", substr(type,1,1), substr(i,1,1), substr(j,1,1), substr(k,1,1),".txt")
               cat(hold_dur, "\n", file = out_dur, append = h_ap, sep = "\t")
+              
+              # repeat for fixed tf
+              if(j == "prec"){
+                
+                hold_out <- get(paste0("ons_fixed_", i, "_", j, "_", k))
+                hold_dur <- get(paste0("dur_fixed_", i, "_", j, "_", k))
+                
+                if(length(hold_out) == 0){
+                  hold_out <- "*"
+                  hold_dur <- "*"
+                }
+                
+                out_file <- paste0(outDir, "/tf_Study_F", substr(i,1,1), substr(j,1,1), substr(k,1,1),".txt")
+                cat(hold_out, "\n", file = out_file, append = h_ap, sep = "\t")
+                out_dur <- paste0(outDir, "/dur_Study_F", substr(i,1,1), substr(j,1,1), substr(k,1,1),".txt")
+                cat(hold_dur, "\n", file = out_dur, append = h_ap, sep = "\t")
+              }
             }
             
           }else{
