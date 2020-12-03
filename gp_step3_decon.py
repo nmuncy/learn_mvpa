@@ -12,7 +12,10 @@ Decon base models = GAM, 2GAM, dmBLOCK, TENT
     BLOCK!
 
 TODO:
-    1) Finish writing/testing for multiple phases
+    1) Update to be robust against empty timing files
+        Idea - break function if tmp_num != float
+        then have func_job adjust based on exit status
+        of function?
 """
 
 # %%
