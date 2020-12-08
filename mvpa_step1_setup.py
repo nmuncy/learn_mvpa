@@ -103,119 +103,14 @@ def func_split(tmp_dir, phase, decon_str, task_num):
         end_vol += len_run
 
 
-# %%
-# def func_job(subj, subj_dir, len_tr, task_dict, der_dir):
-"""
-Step 1: Detrend
+def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str, task_num, model):
 
-Extract TENT sub-bricks associated with behaviors
-    into a single file
-"""
-# For testing
-subj = "sub-005"
-subj_dir = "/scratch/madlab/nate_vCAT/derivatives/sub-005/ses-S1"
-len_tr = 1.76
-task_dict = {
-    "loc": ["face", "scene", "num"],
-    "Study": {"BE": ["Bfe", "Bse"], "FP": ["Ffpc", "Ffpi", "Fspc", "Fspi"]},
-}
-beh_dur = 1
-der_dir = "/scratch/madlab/nate_vCAT/derivatives"
-
-
-# %%
-# Work
-subj_num = subj.split("-")[1]
-mvpa_dir = os.path.join(der_dir, f"mvpa/sub{subj_num}")
-
-for phase in task_dict:
-    if type(task_dict[phase]) == list:
-        decon_str = f"{phase}_decon"
-        if not os.path.exists(
-            os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
-        ):
-            func_detrend(subj_dir, decon_str, task_dict[phase], len_tr)
-    elif type(task_dict[phase]) == dict:
-        for decon in task_dict[phase]:
-            decon_str = f"{phase}_{decon}"
-            if not os.path.exists(
-                os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
-            ):
-                func_detrend(subj_dir, decon_str, task_dict[phase][decon], len_tr)
-
-
-# %%
-"""
-Step 2: Organize MRI data
-
-1) Pymvpa expects certain files in certain locations
-2) Split MVPA afni file into individual runs
-"""
-# pymvpa dirs
-py_dirs = ["BOLD", "anatomy", "model", "masks"]
-for i in py_dirs:
-    if not os.path.exists(os.path.join(mvpa_dir, i)):
-        os.makedirs(os.path.join(mvpa_dir, i))
-
-# anat
-if not os.path.exists(os.path.join(mvpa_dir, "anatomy/struct_ns.nii.gz")):
-    h_cmd = f"module load afni-20.2.06 \n 3dcopy {subj_dir}/struct_ns+tlrc {mvpa_dir}/anatomy/struct_ns.nii.gz"
-    h_job = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-    print(h_job.communicate())
-
-# masks
-mask_dir = os.path.join(mvpa_dir, "masks", "orig")
-if not os.path.exists(mask_dir):
-    os.makedirs(mask_dir)
-
-if not os.path.exists(os.path.join(mask_dir, "Group_Int_Mask.nii.gz")):
-    copyfile(
-        os.path.join(der_dir, "grpAnalysis/Group_Int_Mask.nii.gz"),
-        os.path.join(mask_dir, "Group_Int_Mask.nii.gz"),
-    )
-
-# BOLD - split into runs
-task_count = 1
-for phase in task_dict:
-    if type(task_dict[phase]) == list:
-        h_str = f"{phase}_decon"
-        func_split(subj_dir, phase, h_str, task_count)
-        task_count += 1
-    elif type(task_dict[phase]) == dict:
-        for decon in task_dict[phase]:
-            h_str = f"{phase}_{decon}"
-            func_split(subj_dir, phase, h_str, task_count)
-            task_count += 1
-
-
-# %%
-"""
-Step 3: Organize timing files
-
-1) Based on timing files (e.g. tf_loc_face.txt) from
-    gp_step2_timingFiles.R. Will generate needed attribute files.
-
-2) attributes.txt - one attribute per volume
-    - written to sub*/BOLD/task*
-
-    - Issue from behavior duration, TR mismatch
-    resulting in holes.
-
-    - Fix - fill NaN with preceding attribute value
-    since study is a block design.
-
-3) cond00?.txt - each condition/attribut type has own onset time
-    - ref condtion_key.txt file for definitions
-    - written to sub*/model/model00?/onsets/task*
-    - format = onset, block duration, 1
-        e.g. 157.5 22.5 1
-        duration is in volume time
-"""
-
-# %%
-
-
-def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str):
+    # # For testing
+    # beh_list = task_dict["Study"]["FP"]
+    # tmp_dir = subj_dir
+    # phase = "Study"
+    # decon_str = "Study_FP"
+    # task_num = 3
 
     # determine phase length in seconds
     h_dict = func_lenRun(tmp_dir, decon_str, phase)
@@ -245,28 +140,26 @@ def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str):
             h_spl = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
             print(h_spl.communicate())
 
-
-for count, phase in enumerate(task_dict):
-
-    if type(task_dict[phase]) == list:
-        func_timing(task_dict[phase], len_tr, subj_dir, phase, f"{phase}_decon")
-
-    # %%
     # make attribute files for e/run
+    num_runs = h_dict["NRun"]
     for run in range(1, num_runs + 1):
+        # run = 1
 
         # determine split tf files
-        tf_list = [
-            x
-            for x in os.listdir(subj_dir)
-            if fnmatch.fnmatch(x, f"tmp_tf_{phase}*_r0{run}.1D")
-        ]
-        tf_list.sort()
+        # tf_list = [
+        #     x for x in os.listdir(tmp_dir) if fnmatch.fnmatch(x, f"tmp_tf_{phase}*_r0{run}.1D")
+        # ]
+        # tf_list.sort()
+        tf_list = []
+        for beh in beh_list:
+            h_tf = f"tmp_tf_{phase}_{beh}_r0{run}.1D"
+            if os.path.exists(os.path.join(tmp_dir, h_tf)):
+                tf_list.append(h_tf)
 
         # make attribute df - combine columns
         df_att = pd.concat(
             [
-                pd.read_csv(os.path.join(subj_dir, item), names=[item.split("_")[3]])
+                pd.read_csv(os.path.join(tmp_dir, item), names=[item.split("_")[3]])
                 for item in tf_list
             ],
             axis=1,
@@ -274,19 +167,26 @@ for count, phase in enumerate(task_dict):
         column_list = list(df_att)
 
         # new attribute (att) column, fill with column name (cond)
-        for cond in cond_list:
-            df_att.loc[df_att[cond] == 1, "att"] = cond
+        for beh in beh_list:
+            df_att.loc[df_att[beh] == 1, "att"] = beh
 
         # clean up df
         for i, j in enumerate(df_att["att"]):
 
-            # Fill holes with preceding att value
-            #   skip first, last few volumes
-            if i > 1 and i < (len(df_att) - 2) and pd.isnull(df_att.loc[i, "att"]):
-                if not pd.isnull(df_att.loc[(i - 1), "att"]):
-                    df_att.at[i, "att"] = df_att.loc[(i - 1), "att"]
-                else:
-                    df_att.at[i, "att"] = df_att.loc[(i - 2), "att"]
+            # # Fill holes with preceding att value
+            # #   to account for TR clipping.
+            # #   Skip first/last few volumes,
+            # #   and only fill single holes
+            # if (
+            #     i > 1
+            #     and i < (len(df_att) - 2)
+            #     and pd.isnull(df_att.loc[i, "att"])
+            #     and not pd.isnull(df_att.loc[(i + 1), "att"])
+            # ):
+            #     if not pd.isnull(df_att.loc[(i - 1), "att"]):
+            #         df_att.at[i, "att"] = df_att.loc[(i - 1), "att"]
+            #     else:
+            #         df_att.at[i, "att"] = df_att.loc[(i - 2), "att"]
 
             # remove volumes that had multiple behaviors
             if df_att[column_list].iloc[i].sum() > 1:
@@ -299,7 +199,7 @@ for count, phase in enumerate(task_dict):
         # write
         col_select = ["att", "zero"]
         h_out = os.path.join(
-            mvpa_dir, "BOLD", f"task00{count+1}_run00{run}", "attributes.txt"
+            mvpa_dir, "BOLD", f"task00{task_num}_run00{run}", "attributes.txt"
         )
         np.savetxt(h_out, df_att[col_select].values, fmt="%s", delimiter=" ")
 
@@ -307,21 +207,23 @@ for count, phase in enumerate(task_dict):
         model_dir = os.path.join(
             mvpa_dir,
             "model",
-            f"model00{count+1}",
+            f"{model}",
             "onsets",
-            f"task00{count+1}_run00{run}",
+            f"task00{task_num}_run00{run}",
         )
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
 
-        for cc, cond in enumerate(cond_list):
-
-            # determine start and end volume of each cond block
+        for cc, beh in enumerate(beh_list):
+            # cc = 0
+            # beh = beh_list[0]
+            # determine start and end volume of each cond block,
+            #   account for behaviors that last for single volumes
             ons_dict = {"Start": [], "End": []}
             for i, j in enumerate(df_att["att"]):
-                if j == cond and not df_att.loc[(i - 1), "att"] == cond:
+                if j == beh and not df_att.loc[(i - 1), "att"] == beh:
                     ons_dict["Start"].append(i)
-                elif j == cond and not df_att.loc[(i + 1), "att"] == cond:
+                if j == beh and not df_att.loc[(i + 1), "att"] == beh:
                     ons_dict["End"].append(i)
 
             # determine start, duration of each block in volume time
@@ -337,34 +239,161 @@ for count, phase in enumerate(task_dict):
 
 
 # %%
-# # receive arguments
-# def func_argparser():
-#     parser = ArgumentParser("Receive Bash args from wrapper")
-#     parser.add_argument("h_sub", help="Subject ID")
-#     parser.add_argument("h_dir", help="Subject Directory")
-#     parser.add_argument("h_trl", help="TR Length")
-#     parser.add_argument("h_der", help="Derivatives Directory")
-#     return parser
+def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
+    """
+    Step 1: Detrend
+
+    Extract TENT sub-bricks associated with behaviors
+        into a single file
+    """
+    # # For testing
+    # subj = "sub-005"
+    # subj_dir = "/scratch/madlab/nate_vCAT/derivatives/sub-005/ses-S1"
+    # len_tr = 1.76
+    # task_dict = {
+    #     "loc": ["face", "scene", "num"],
+    #     "Study": {"BE": ["Bfe", "Bse"], "FP": ["Ffpc", "Ffpi", "Fspc", "Fspi"]},
+    # }
+    # beh_dur = 1
+    # der_dir = "/scratch/madlab/nate_vCAT/derivatives"
+    # model = "model001"
+
+    # %%
+    # Work
+    subj_num = subj.split("-")[1]
+    mvpa_dir = os.path.join(der_dir, f"mvpa/sub{subj_num}")
+
+    for phase in task_dict:
+        if type(task_dict[phase]) == list:
+            decon_str = f"{phase}_decon"
+            if not os.path.exists(
+                os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
+            ):
+                func_detrend(subj_dir, decon_str, task_dict[phase], len_tr)
+        elif type(task_dict[phase]) == dict:
+            for decon in task_dict[phase]:
+                decon_str = f"{phase}_{decon}"
+                if not os.path.exists(
+                    os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
+                ):
+                    func_detrend(subj_dir, decon_str, task_dict[phase][decon], len_tr)
+
+    # %%
+    """
+    Step 2: Organize MRI data
+
+    1) Pymvpa expects certain files in certain locations
+    2) Split MVPA afni file into individual runs
+    """
+    # pymvpa dirs
+    py_dirs = ["BOLD", "anatomy", "model", "masks"]
+    for i in py_dirs:
+        if not os.path.exists(os.path.join(mvpa_dir, i)):
+            os.makedirs(os.path.join(mvpa_dir, i))
+
+    # anat
+    if not os.path.exists(os.path.join(mvpa_dir, "anatomy/struct_ns.nii.gz")):
+        h_cmd = f"module load afni-20.2.06 \n 3dcopy {subj_dir}/struct_ns+tlrc {mvpa_dir}/anatomy/struct_ns.nii.gz"
+        h_job = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+        print(h_job.communicate())
+
+    # masks
+    mask_dir = os.path.join(mvpa_dir, "masks", "orig")
+    if not os.path.exists(mask_dir):
+        os.makedirs(mask_dir)
+
+    if not os.path.exists(os.path.join(mask_dir, "Group_Int_Mask.nii.gz")):
+        copyfile(
+            os.path.join(der_dir, "grpAnalysis/Group_Int_Mask.nii.gz"),
+            os.path.join(mask_dir, "Group_Int_Mask.nii.gz"),
+        )
+
+    # BOLD - split into runs
+    task_count = 1
+    for phase in task_dict:
+        if type(task_dict[phase]) == list:
+            h_str = f"{phase}_decon"
+            func_split(subj_dir, phase, h_str, task_count)
+            task_count += 1
+        elif type(task_dict[phase]) == dict:
+            for decon in task_dict[phase]:
+                h_str = f"{phase}_{decon}"
+                func_split(subj_dir, phase, h_str, task_count)
+                task_count += 1
+
+    # %%
+    """
+    Step 3: Organize timing files
+
+    1) Based on timing files (e.g. tf_loc_face.txt) from
+        gp_step2_timingFiles.R. Will generate needed attribute files.
+
+    2) attributes.txt - one attribute per volume
+        - written to sub*/BOLD/task*
+
+        - Issue from behavior duration, TR mismatch
+        resulting in holes.
+
+        - Fix - fill NaN with preceding attribute value
+        since study is a block design.
+
+    3) cond00?.txt - each condition/attribut type has own onset time
+        - ref condtion_key.txt file for definitions
+        - written to sub*/model/model00?/onsets/task*
+        - format = onset, block duration, 1
+            e.g. 157.5 22.5 1
+            duration is in volume time
+    """
+    task_count = 1
+    for phase in task_dict:
+        if type(task_dict[phase]) == list:
+            func_timing(
+                task_dict[phase],
+                len_tr,
+                subj_dir,
+                phase,
+                f"{phase}_decon",
+                task_count,
+                model,
+            )
+            task_count += 1
+        elif type(task_dict[phase]) == dict:
+            for decon in task_dict[phase]:
+                func_timing(
+                    task_dict[phase][decon],
+                    len_tr,
+                    subj_dir,
+                    phase,
+                    f"{phase}_{decon}",
+                    task_count,
+                    model,
+                )
+                task_count += 1
 
 
-# # %%
-# def main():
-
-#     args = func_argparser().parse_args()
-#     with open(os.path.join(args.h_der, "mvpa/task_dict.json")) as json_file:
-#         h_task_dict = json.load(json_file)
-
-#     # print(args.h_sub, args.h_dir, args.h_trl, h_task_dict, args.h_der)
-#     func_job(
-#         args.h_sub,
-#         args.h_dir,
-#         float(args.h_trl),
-#         h_task_dict,
-#         args.h_der,
-#     )
+# %%
+# receive arguments
+def func_argparser():
+    parser = ArgumentParser("Receive Bash args from wrapper")
+    parser.add_argument("h_sub", help="Subject ID")
+    parser.add_argument("h_dir", help="Subject Directory")
+    parser.add_argument("h_trl", help="TR Length")
+    parser.add_argument("h_der", help="Derivatives Directory")
+    parser.add_argument("h_mod", help="Model string")
+    return parser
 
 
-# if __name__ == "__main__":
-#     main()
+# %%
+def main():
+    args = func_argparser().parse_args()
+    with open(os.path.join(args.h_der, "mvpa/task_dict.json")) as json_file:
+        h_task_dict = json.load(json_file)
+    func_job(
+        args.h_sub, args.h_dir, float(args.h_trl), h_task_dict, args.h_der, args.h_mod
+    )
+
+
+if __name__ == "__main__":
+    main()
 
 # %%
