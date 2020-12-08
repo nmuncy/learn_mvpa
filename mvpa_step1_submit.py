@@ -24,11 +24,10 @@ deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
 code_dir = "/home/nmuncy/compute/learn_mvpa"
 task_dict = {
     "loc": ["face", "scene", "num"],
-    "Study": {"BE": ["face", "scene"], "FP": ["face", "scene"]},
+    "Study": {"BE": ["Bfe", "Bse"], "FP": ["Ffpc", "Ffpi", "Fspc", "Fspi"]},
 }
 sess = "ses-S1"
 beh_dur = 1
-# decon_type = "TENT"
 
 
 # %%
@@ -180,7 +179,7 @@ for subj in subj_list:
         -p centos7_IB_44C_512G  -o {h_out} -e {h_err} \
         --account iacc_madlab --qos pq_madlab \
         --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step1_setup.py \
-            {subj} {subj_dir} {decon_type} {len_tr} {beh_dur} {deriv_dir}"
+            {subj} {subj_dir} {len_tr} {beh_dur} {deriv_dir}"
     """
 
     sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
