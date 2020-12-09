@@ -4,6 +4,11 @@ Notes
 Written in Python 3.8
 
 Assumes gp_step1-3 from afni_python have already been done
+
+TODO:
+    Fix duration for single-volume behaviors (ref FP)
+    Check sub-*/model/model*/onsets/task*/cond*.txt for
+        accurate onset, duration
 """
 
 # %%

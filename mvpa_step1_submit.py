@@ -23,7 +23,7 @@ deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
 code_dir = "/home/nmuncy/compute/learn_mvpa"
 task_dict = {
     "loc": ["face", "scene", "num"],
-    "Study": {"BE": ["Bfe", "Bse"], "FP": ["Ffpc", "Ffpi", "Fspc", "Fspi"]},
+    "Study": {"BE": ["Bfe", "Bse"]},
 }
 sess = "ses-S1"
 model = "model001"
@@ -163,28 +163,28 @@ def main():
     )
     os.makedirs(out_dir)
 
-    # for subj in subj_list:
-    subj = subj_list[0]
+    for subj in subj_list:
+        # subj = subj_list[0]
 
-    # Set stdout/err file
-    h_out = os.path.join(out_dir, f"out_{subj}.txt")
-    h_err = os.path.join(out_dir, f"err_{subj}.txt")
+        # Set stdout/err file
+        h_out = os.path.join(out_dir, f"out_{subj}.txt")
+        h_err = os.path.join(out_dir, f"err_{subj}.txt")
 
-    # submit command
-    subj_dir = os.path.join(deriv_dir, subj, sess)
-    sbatch_job = f"""
-        sbatch \
-        -J "MVPA1{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
-        -p centos7_IB_44C_512G  -o {h_out} -e {h_err} \
-        --account iacc_madlab --qos pq_madlab \
-        --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step1_setup.py \
-            {subj} {subj_dir} {len_tr} {deriv_dir} {model}"
-    """
+        # submit command
+        subj_dir = os.path.join(deriv_dir, subj, sess)
+        sbatch_job = f"""
+            sbatch \
+            -J "MVPA1{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
+            -p centos7_IB_44C_512G  -o {h_out} -e {h_err} \
+            --account iacc_madlab --qos pq_madlab \
+            --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step1_setup.py \
+                {subj} {subj_dir} {len_tr} {deriv_dir} {model}"
+        """
 
-    sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
-    job_id = sbatch_submit.communicate()[0]
-    print(job_id)
-    time.sleep(1)
+        sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
+        job_id = sbatch_submit.communicate()[0]
+        print(job_id)
+        time.sleep(1)
 
 
 if __name__ == "__main__":
