@@ -11,7 +11,6 @@ import subprocess
 import fnmatch
 import os
 import json
-import time
 import pandas as pd
 import numpy as np
 from shutil import copyfile
@@ -19,25 +18,25 @@ from argparse import ArgumentParser
 from gp_step0_dcm2nii import func_sbatch
 
 
-def func_detrend(tmp_dir, decon_str, tmp_list, tmp_tr):
+def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_len_tr, dtr_subj_num):
 
     # get relevant column numbers
     #   read design matrix, find column labels,
     #   then look for column label in task_dict
     #   to get a brick_list of only effects of interest
     brick_list = []
-    with open(os.path.join(tmp_dir, f"X.{decon_str}.xmat.1D")) as f:
+    with open(os.path.join(dtr_subj_dir, f"X.{dtr_dcn_str}.xmat.1D")) as f:
         h_file = f.readlines()
         for line in h_file:
             if line.__contains__("ColumnLabels"):
                 col_list = line.split('"')[1].replace(" ", "").split(";")
                 for i, j in enumerate(col_list):
-                    if j.split("#")[0] in tmp_list:
+                    if j.split("#")[0] in dtr_beh_list:
                         brick_list.append(f"{str(i)}")
 
     # determine correct number of sub-bricks
     #   decon adds an extra for model
-    h_cmd = f"module load afni-20.2.06 \n 3dinfo -nv {tmp_dir}/{decon_str}_cbucket_REML+tlrc"
+    h_cmd = f"module load afni-20.2.06 \n 3dinfo -nv {dtr_subj_dir}/{dtr_dcn_str}_cbucket_REML+tlrc"
     h_len = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     len_wrong = h_len.communicate()[0].decode("utf-8").strip()
     len_right = int(len_wrong) - 2
@@ -46,18 +45,18 @@ def func_detrend(tmp_dir, decon_str, tmp_list, tmp_tr):
     #   only contains tent data, extra sub-bricks
     #   are left behind
     h_cmd = f"""
-        cd {tmp_dir}
-        3dTcat -prefix tmp_{decon_str}_cbucket -tr {tmp_tr} "{decon_str}_cbucket_REML+tlrc[0..{len_right}]"
-        3dSynthesize -prefix MVPA_{decon_str}_all -matrix X.{decon_str}.xmat.1D \
-                -cbucket tmp_{decon_str}_cbucket+tlrc -select {" ".join(brick_list)} -cenfill nbhr
+        cd {dtr_subj_dir}
+        3dTcat -prefix tmp_{dtr_dcn_str}_cbucket -tr {dtr_len_tr} "{dtr_dcn_str}_cbucket_REML+tlrc[0..{len_right}]"
+        3dSynthesize -prefix MVPA_{dtr_dcn_str}_all -matrix X.{dtr_dcn_str}.xmat.1D \
+                -cbucket tmp_{dtr_dcn_str}_cbucket+tlrc -select {" ".join(brick_list)} -cenfill nbhr
     """
-    func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}all", tmp_dir)
+    func_sbatch(h_cmd, 1, 1, 1, f"{dtr_subj_num}all", dtr_subj_dir)
 
 
-def func_lenRun(tmp_dir, decon_str, phase):
+def func_lenRun(lrn_subj_dir, lrn_dcn_str, lrn_phase):
 
     # determine number of volumes
-    h_cmd = f"module load afni-20.2.06 \n 3dinfo -ntimes {subj_dir}/MVPA_{decon_str}_all+tlrc"
+    h_cmd = f"module load afni-20.2.06 \n 3dinfo -ntimes {lrn_subj_dir}/MVPA_{lrn_dcn_str}_all+tlrc"
     h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     num_nvol = int(h_nvol.communicate()[0].decode("utf-8").strip())
 
@@ -65,8 +64,8 @@ def func_lenRun(tmp_dir, decon_str, phase):
     num_runs = len(
         [
             x
-            for x in os.listdir(subj_dir)
-            if fnmatch.fnmatch(x, f"*{phase}*scale+tlrc.HEAD")
+            for x in os.listdir(lrn_subj_dir)
+            if fnmatch.fnmatch(x, f"*{lrn_phase}*scale+tlrc.HEAD")
         ]
     )
 
@@ -76,10 +75,18 @@ def func_lenRun(tmp_dir, decon_str, phase):
     return tmp_dict
 
 
-def func_split(tmp_dir, phase, decon_str, task_num):
+def func_split(
+    spl_subj_dir,
+    spl_phase,
+    spl_dcn_str,
+    spl_task_num,
+    spl_subj_num,
+    spl_len_tr,
+    spl_mvpa_dir,
+):
 
     # split mvpa file into individual runs
-    h_dict = func_lenRun(tmp_dir, decon_str, phase)
+    h_dict = func_lenRun(spl_subj_dir, spl_dcn_str, spl_phase)
     len_run = h_dict["LRun"]
 
     beg_vol = 0
@@ -87,42 +94,53 @@ def func_split(tmp_dir, phase, decon_str, task_num):
     for run in range(1, h_dict["NRun"] + 1):
 
         # make dir for e/run
-        bold_dir = os.path.join(mvpa_dir, f"BOLD/task00{task_num}_run00{run}")
+        bold_dir = os.path.join(spl_mvpa_dir, f"BOLD/task00{spl_task_num}_run00{run}")
         if not os.path.exists(bold_dir):
             os.makedirs(bold_dir)
 
         # split
         if not os.path.exists(os.path.join(bold_dir, "bold.nii.gz")):
             h_cmd = f"""
-                cd {tmp_dir}
-                3dTcat -prefix tmp_run-{run}_{decon_str}_MVPA -tr {len_tr} "MVPA_{decon_str}_all+tlrc[{beg_vol}..{end_vol}]"
-                3dcopy tmp_run-{run}_{decon_str}_MVPA+tlrc {bold_dir}/bold.nii.gz
+                cd {spl_subj_dir}
+                3dTcat -prefix tmp_run-{run}_{spl_dcn_str}_MVPA -tr {spl_len_tr} "MVPA_{spl_dcn_str}_all+tlrc[{beg_vol}..{end_vol}]"
+                3dcopy tmp_run-{run}_{spl_dcn_str}_MVPA+tlrc {bold_dir}/bold.nii.gz
             """
-            func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}spl", tmp_dir)
+            func_sbatch(h_cmd, 1, 1, 1, f"{spl_subj_num}spl", spl_subj_dir)
         beg_vol += len_run
         end_vol += len_run
 
 
-def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str, task_num, model):
+def func_timing(
+    tim_beh_list,
+    tim_len_tr,
+    tim_subj_dir,
+    tim_phase,
+    tim_dcn_str,
+    tim_task_num,
+    tim_model,
+    tim_mvpa_dir,
+):
 
     # # For testing
-    # beh_list = task_dict["Study"]["FP"]
-    # tmp_dir = subj_dir
-    # phase = "Study"
-    # decon_str = "Study_FP"
-    # task_num = 3
+    # tim_beh_list = task_dict["Study"]["FP"]
+    # tim_subj_dir = subj_dir
+    # tim_phase = "Study"
+    # tim_dcn_str = "Study_FP"
+    # tim_task_num = 3
 
-    # determine phase length in seconds
-    h_dict = func_lenRun(tmp_dir, decon_str, phase)
-    len_sec = h_dict["LRun"] * len_tr
+    # determine tim_phase length in seconds
+    h_dict = func_lenRun(tim_subj_dir, tim_dcn_str, tim_phase)
+    len_sec = h_dict["LRun"] * tim_len_tr
 
     # split timing files into 1D
-    for beh in beh_list:
-        if not os.path.exists(os.path.join(subj_dir, f"tmp_tf_{phase}_{beh}_r01.1D")):
+    for beh in tim_beh_list:
+        if not os.path.exists(
+            os.path.join(tim_subj_dir, f"tmp_tf_{tim_phase}_{beh}_r01.1D")
+        ):
 
             # determine behavior duration, get 1st number in column 0
             data_raw = pd.read_csv(
-                os.path.join(tmp_dir, f"dur_{phase}_{beh}.txt"), header=None
+                os.path.join(tim_subj_dir, f"dur_{tim_phase}_{beh}.txt"), header=None
             )
             data_clean = data_raw[0].str.split("\t", expand=True)
             for value in data_clean[0]:
@@ -133,9 +151,9 @@ def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str, task_num, model):
             # make 1D file per run
             h_cmd = f"""
                 module load afni-20.2.06
-                timing_tool.py -timing {subj_dir}/tf_{phase}_{beh}.txt \
-                    -tr {len_tr} -stim_dur {beh_dur} -run_len {len_sec} -timing_to_1D \
-                    {subj_dir}/tmp_tf_{phase}_{beh} -per_run_file
+                timing_tool.py -timing {tim_subj_dir}/tf_{tim_phase}_{beh}.txt \
+                    -tr {tim_len_tr} -stim_dur {beh_dur} -run_len {len_sec} -timing_to_1D \
+                    {tim_subj_dir}/tmp_tf_{tim_phase}_{beh} -per_run_file
             """
             h_spl = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
             print(h_spl.communicate())
@@ -143,23 +161,20 @@ def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str, task_num, model):
     # make attribute files for e/run
     num_runs = h_dict["NRun"]
     for run in range(1, num_runs + 1):
-        # run = 1
 
         # determine split tf files
-        # tf_list = [
-        #     x for x in os.listdir(tmp_dir) if fnmatch.fnmatch(x, f"tmp_tf_{phase}*_r0{run}.1D")
-        # ]
-        # tf_list.sort()
         tf_list = []
-        for beh in beh_list:
-            h_tf = f"tmp_tf_{phase}_{beh}_r0{run}.1D"
-            if os.path.exists(os.path.join(tmp_dir, h_tf)):
+        for beh in tim_beh_list:
+            h_tf = f"tmp_tf_{tim_phase}_{beh}_r0{run}.1D"
+            if os.path.exists(os.path.join(tim_subj_dir, h_tf)):
                 tf_list.append(h_tf)
 
         # make attribute df - combine columns
         df_att = pd.concat(
             [
-                pd.read_csv(os.path.join(tmp_dir, item), names=[item.split("_")[3]])
+                pd.read_csv(
+                    os.path.join(tim_subj_dir, item), names=[item.split("_")[3]]
+                )
                 for item in tf_list
             ],
             axis=1,
@@ -167,28 +182,11 @@ def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str, task_num, model):
         column_list = list(df_att)
 
         # new attribute (att) column, fill with column name (cond)
-        for beh in beh_list:
+        for beh in tim_beh_list:
             df_att.loc[df_att[beh] == 1, "att"] = beh
 
-        # clean up df
+        # remove volumes that had multiple behaviors
         for i, j in enumerate(df_att["att"]):
-
-            # # Fill holes with preceding att value
-            # #   to account for TR clipping.
-            # #   Skip first/last few volumes,
-            # #   and only fill single holes
-            # if (
-            #     i > 1
-            #     and i < (len(df_att) - 2)
-            #     and pd.isnull(df_att.loc[i, "att"])
-            #     and not pd.isnull(df_att.loc[(i + 1), "att"])
-            # ):
-            #     if not pd.isnull(df_att.loc[(i - 1), "att"]):
-            #         df_att.at[i, "att"] = df_att.loc[(i - 1), "att"]
-            #     else:
-            #         df_att.at[i, "att"] = df_att.loc[(i - 2), "att"]
-
-            # remove volumes that had multiple behaviors
             if df_att[column_list].iloc[i].sum() > 1:
                 df_att.at[i, "att"] = "base"
 
@@ -199,26 +197,25 @@ def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str, task_num, model):
         # write
         col_select = ["att", "zero"]
         h_out = os.path.join(
-            mvpa_dir, "BOLD", f"task00{task_num}_run00{run}", "attributes.txt"
+            tim_mvpa_dir, "BOLD", f"task00{tim_task_num}_run00{run}", "attributes.txt"
         )
         np.savetxt(h_out, df_att[col_select].values, fmt="%s", delimiter=" ")
 
         # make onset times for each task/run
-        model_dir = os.path.join(
-            mvpa_dir,
+        model_out = os.path.join(
+            tim_mvpa_dir,
             "model",
-            f"{model}",
+            f"{tim_model}",
             "onsets",
-            f"task00{task_num}_run00{run}",
+            f"task00{tim_task_num}_run00{run}",
         )
-        if not os.path.exists(model_dir):
-            os.makedirs(model_dir)
+        if not os.path.exists(model_out):
+            os.makedirs(model_out)
 
-        for cc, beh in enumerate(beh_list):
-            # cc = 0
-            # beh = beh_list[0]
-            # determine start and end volume of each cond block,
-            #   account for behaviors that last for single volumes
+        # determine start and end volume of each cond block,
+        #   account for behaviors that last for single volumes
+        for cc, beh in enumerate(tim_beh_list):
+
             ons_dict = {"Start": [], "End": []}
             for i, j in enumerate(df_att["att"]):
                 if j == beh and not df_att.loc[(i - 1), "att"] == beh:
@@ -228,13 +225,13 @@ def func_timing(beh_list, len_tr, tmp_dir, phase, decon_str, task_num, model):
 
             # determine start, duration of each block in volume time
             df_ons = pd.DataFrame(ons_dict)
-            df_ons["ons"] = round((df_ons["Start"] * len_tr), 1)
-            df_ons["dur"] = round(((df_ons["End"] - df_ons["Start"]) * len_tr), 1)
+            df_ons["ons"] = round((df_ons["Start"] * tim_len_tr), 1)
+            df_ons["dur"] = round(((df_ons["End"] - df_ons["Start"]) * tim_len_tr), 1)
             df_ons["one"] = 1
 
             # write
             col_select = ["ons", "dur", "one"]
-            h_out = os.path.join(model_dir, f"cond00{cc+1}.txt")
+            h_out = os.path.join(model_out, f"cond00{cc+1}.txt")
             np.savetxt(h_out, df_ons[col_select].values, fmt="%s", delimiter=" ")
 
 
@@ -269,14 +266,16 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
             if not os.path.exists(
                 os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
             ):
-                func_detrend(subj_dir, decon_str, task_dict[phase], len_tr)
+                func_detrend(subj_dir, decon_str, task_dict[phase], len_tr, subj_num)
         elif type(task_dict[phase]) == dict:
             for decon in task_dict[phase]:
                 decon_str = f"{phase}_{decon}"
                 if not os.path.exists(
                     os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
                 ):
-                    func_detrend(subj_dir, decon_str, task_dict[phase][decon], len_tr)
+                    func_detrend(
+                        subj_dir, decon_str, task_dict[phase][decon], len_tr, subj_num
+                    )
 
     # %%
     """
@@ -313,12 +312,14 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
     for phase in task_dict:
         if type(task_dict[phase]) == list:
             h_str = f"{phase}_decon"
-            func_split(subj_dir, phase, h_str, task_count)
+            func_split(subj_dir, phase, h_str, task_count, subj_num, len_tr, mvpa_dir)
             task_count += 1
         elif type(task_dict[phase]) == dict:
             for decon in task_dict[phase]:
                 h_str = f"{phase}_{decon}"
-                func_split(subj_dir, phase, h_str, task_count)
+                func_split(
+                    subj_dir, phase, h_str, task_count, subj_num, len_tr, mvpa_dir
+                )
                 task_count += 1
 
     # %%
@@ -355,6 +356,7 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
                 f"{phase}_decon",
                 task_count,
                 model,
+                mvpa_dir,
             )
             task_count += 1
         elif type(task_dict[phase]) == dict:
@@ -367,6 +369,7 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
                     f"{phase}_{decon}",
                     task_count,
                     model,
+                    mvpa_dir,
                 )
                 task_count += 1
 
@@ -387,9 +390,15 @@ def func_argparser():
 def main():
     args = func_argparser().parse_args()
     with open(os.path.join(args.h_der, "mvpa/task_dict.json")) as json_file:
-        h_task_dict = json.load(json_file)
+        main_task_dict = json.load(json_file)
+
     func_job(
-        args.h_sub, args.h_dir, float(args.h_trl), h_task_dict, args.h_der, args.h_mod
+        args.h_sub,
+        args.h_dir,
+        float(args.h_trl),
+        main_task_dict,
+        args.h_der,
+        args.h_mod,
     )
 
 
