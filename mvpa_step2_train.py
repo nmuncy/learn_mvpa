@@ -38,7 +38,7 @@ def func_one_subj(data_path):
     task = 1
     model = 1
     subj = 5
-    run_datasets = []
+    run_data = []
 
     for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
 
@@ -46,23 +46,23 @@ def func_one_subj(data_path):
         run_events = dhandle.get_bold_run_model(model, subj, run_id)
 
         # fmri data, mask
-        run_ds = dhandle.get_bold_run_dataset(subj,
-                                              task,
-                                              run_id,
-                                              chunks=run_id - 1,
-                                              mask=mask_subj)
+        subj_data = dhandle.get_bold_run_dataset(subj,
+                                                 task,
+                                                 run_id,
+                                                 chunks=run_id - 1,
+                                                 mask=mask_subj)
 
         # convert event to sample attribute, assign as target
-        run_ds.sa['targets'] = events2sample_attr(run_events,
-                                                  run_ds.sa.time_coords,
-                                                  noinfolabel='base')
+        subj_data.sa['targets'] = events2sample_attr(run_events,
+                                                     subj_data.sa.time_coords,
+                                                     noinfolabel='base')
 
         # write list
-        run_datasets.append(run_ds)
+        run_data.append(subj_data)
 
     # merge datasets, a=0 means attributes for first
     #   set should be used for all data
-    fds_all = vstack(run_datasets, a=0)
+    fds_all = vstack(run_data, a=0)
     print fds_all.summary()
 
     # behavior functional dataset - remove base volumes
@@ -160,82 +160,93 @@ def func_one_subj(data_path):
 
 
 # %%
-def func_make_group(data_path, hdf5_path):
+def func_make_hdf5(mkhd_data_path, mkhd_hdf5_path, mkhd_model_dict):
     """
-    MVPA with all data
+    Make training data (task001)
+        Exclude base, num attributes (targets) from training
 
-    Step 1: Load data
+    Load all data in mvpa/sub*, save to
+        mkhd_hdf5_path.
     """
     # # For testing
     # par_path = "/Users/nmuncy/Projects/learn_mvpa"
-    # data_path = os.path.join(h_par_path, "mvpa")
-    # hdf5_path = os.path.join(data_path, "hdf5")
+    # mkhd_data_path = os.path.join(main_par_path, "mvpa")
+    # mkhd_hdf5_path = os.path.join(mkhd_data_path, "hdf5")
+    # mkhd_model_dict = {1: {"Train": 1, "Test": 2}}
 
-    # load dataset
-    dhandle = mvpa2.datasets.sources.OpenFMRIDataset(data_path)
+    # make handler, load dataset info
+    dhandle = mvpa2.datasets.sources.OpenFMRIDataset(mkhd_data_path)
     dhandle.get_subj_ids()
     dhandle.get_task_descriptions()
 
-    task = 1
-    model = 1
-    data_list = []
+    # make train, test hdf5 files for each planned model
+    for model in mkhd_model_dict:
+        for data_type in mkhd_model_dict[model]:
 
-    # load data
-    for subj in dhandle.get_task_bold_run_ids(task):
-        # subj = 5
-        print subj
+            # set task, model, out_file string
+            task = mkhd_model_dict[model][data_type]
+            # model = 1
+            out_file = os.path.join(
+                mkhd_hdf5_path, "data_{}.hdf5.gz".format(data_type))
+            if not os.path.exists(out_file):
 
-        run_datasets = []
-        for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
-            print run_id
+                # load data
+                group_data = []
+                for subj in dhandle.get_task_bold_run_ids(task):
 
-            # pad
-            if subj < 10:
-                subj_num = "sub00" + str(subj)
-            else:
-                subj_num = "sub0" + str(subj)
+                    run_data = []
+                    for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
+                        print run_id
 
-            # determine mask
-            mask_fname = os.path.join(data_path, subj_num,
-                                      "masks/orig/Group_Int_Mask.nii.gz")
+                        # pad
+                        if subj < 10:
+                            subj_num = "sub00" + str(subj)
+                        else:
+                            subj_num = "sub0" + str(subj)
 
-            # get model
-            run_events = dhandle.get_bold_run_model(model, subj, run_id)
+                        # determine mask
+                        mask_fname = os.path.join(mkhd_data_path, subj_num,
+                                                  "masks/orig/Group_Int_Mask.nii.gz")
 
-            # get data
-            run_ds = dhandle.get_bold_run_dataset(subj,
-                                                  task,
-                                                  run_id,
-                                                  chunks=run_id - 1,
-                                                  mask=mask_fname)
+                        # get model
+                        run_events = dhandle.get_bold_run_model(
+                            model, subj, run_id)
 
-            # get behavior events
-            run_ds.sa['targets'] = events2sample_attr(run_events,
-                                                      run_ds.sa.time_coords,
-                                                      noinfolabel='base')
+                        # get data
+                        subj_data = dhandle.get_bold_run_dataset(subj,
+                                                                 task,
+                                                                 run_id,
+                                                                 chunks=run_id - 1,
+                                                                 mask=mask_fname)
 
-            # clean, save
-            run_ds = run_ds[run_ds.sa.targets != 'base']
-            run_ds = run_ds[run_ds.sa.targets != 'num']
-            run_datasets.append(run_ds)
+                        # get behavior events
+                        subj_data.sa['targets'] = events2sample_attr(run_events,
+                                                                     subj_data.sa.time_coords,
+                                                                     noinfolabel='base')
 
-        # check that number of voxels (length) is equal across subjs
-        #   this is a result of the mask
-        print run_ds.fa.values()
+                        # clean, save
+                        subj_data = subj_data[subj_data.sa.targets != 'base']
+                        subj_data = subj_data[subj_data.sa.targets != 'num']
+                        run_data.append(subj_data)
 
-        # append list, collapse across runs
-        data_list.append(vstack(run_datasets, a=0))
+                    # check that number of voxels (length) is equal across subjs
+                    #   this is a result of the mask
+                    print subj_data.fa.values()
 
-    # save all data as one file
-    mvpa2.base.hdf5.h5save(os.path.join(hdf5_path, "data_all.hdf5.gz"),
-                           data_list,
-                           mode='w',
-                           mkdir=True,
-                           compression="gzip")
+                    # append list, collapse across runs
+                    group_data.append(vstack(run_data, a=0))
 
-    del run_ds
-    del data_list
-    del run_datasets
+                # save all data as one file
+                mvpa2.base.hdf5.h5save(out_file,
+                                       group_data,
+                                       mode='w',
+                                       mkdir=True,
+                                       compression="gzip")
+
+            # free ram
+            del subj_data
+            del group_data
+            del run_data
 
 
 def func_train(hdf5_path, group_path):
@@ -251,7 +262,7 @@ def func_train(hdf5_path, group_path):
     # hdf5_path = os.path.join(data_path, "hdf5")
 
     # get data
-    fds_all = h5load(os.path.join(hdf5_path, "data_all.hdf5.gz"))
+    fds_all = h5load(os.path.join(hdf5_path, "data_train.hdf5.gz"))
 
     for i, sd in enumerate(fds_all):
         sd.sa['subject'] = np.repeat(i, len(sd))
@@ -302,11 +313,12 @@ def func_train(hdf5_path, group_path):
                            NFoldPartitioner(attr='subject'),
                            errorfx=mean_match_accuracy)
 
-    # run classifier
-    wsc_results = [cvws(sd) for sd in fds_all]
-    wsc_results = vstack(wsc_results)
-    fds_comb = vstack(fds_all)
-    bsc_results = cvbs(fds_comb)
+    # # run classifier
+    # #   TODO update here, test on different data
+    # wsc_results = [cvws(sd) for sd in fds_all]
+    # wsc_results = vstack(wsc_results)
+    # fds_comb = vstack(fds_all)
+    # bsc_results = cvbs(fds_comb)
 
     # %%
     """
@@ -388,7 +400,7 @@ def func_train(hdf5_path, group_path):
         np.corrcoef(sd.get_mapped(mean_group_sample(['targets'])).samples)
         for sd in ds_hyper
     ],
-                            axis=0)
+        axis=0)
 
     ds_hyper = vstack(ds_hyper)
     sm_hyper = np.corrcoef(ds_hyper.get_mapped(mean_group_sample(['targets'])))
@@ -434,23 +446,31 @@ def func_train(hdf5_path, group_path):
 
 # %%
 def main():
+    """
+    model001 = loc, BE data
+        task001 = loc - training data
+        task002 = BE - test data
+
+    main_model_dict = {<model num>: {"Train": <task num>, "Test": <task num>}}
+    """
 
     # set up
-    h_par_path = sys.argv[1]
-    # h_par_path = "/Users/nmuncy/Projects/learn_mvpa"
-    h_group_path = os.path.join(h_par_path, "grpAnalysis")
-    h_data_path = os.path.join(h_par_path, "mvpa")
-    h_hdf5_path = os.path.join(h_data_path, "hdf5")
+    main_par_path = sys.argv[1]
+    # main_par_path = "/Users/nmuncy/Projects/learn_mvpa"
+    main_group_path = os.path.join(main_par_path, "grpAnalysis")
+    main_data_path = os.path.join(main_par_path, "mvpa")
+    main_hd5f_path = os.path.join(main_data_path, "hdf5")
 
-    if not os.path.exists(h_hdf5_path):
-        os.makedirs(h_hdf5_path)
+    # make model dict
+    main_model_dict = {1: {"Train": 1, "Test": 2}}
 
-    # load all subject data
-    if not os.path.exists(os.path.join(h_hdf5_path, "data_all.hdf5.gz")):
-        func_make_group(h_data_path, h_hdf5_path)
+    # make hdf5 datasets
+    if not os.path.exists(main_hd5f_path):
+        os.makedirs(main_hd5f_path)
+    func_make_hdf5(main_data_path, main_hd5f_path, main_model_dict)
 
     # run classifier
-    func_train(h_hdf5_path, h_group_path)
+    # func_train(main_hd5f_path, main_group_path)
 
 
 if __name__ == "__main__":
