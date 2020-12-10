@@ -2,13 +2,14 @@
 Notes
 
 This is written in Python 2.7
+
+TODO write model_dict to json from here
 """
 
 # %%
 import os
 import subprocess
 from datetime import datetime
-# import time
 
 
 def func_job(deriv_dir, code_dir):

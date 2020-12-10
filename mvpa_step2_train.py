@@ -46,19 +46,19 @@ def func_one_subj(data_path):
         run_events = dhandle.get_bold_run_model(model, subj, run_id)
 
         # fmri data, mask
-        subj_data = dhandle.get_bold_run_dataset(subj,
-                                                 task,
-                                                 run_id,
-                                                 chunks=run_id - 1,
-                                                 mask=mask_subj)
+        run_data = dhandle.get_bold_run_dataset(subj,
+                                                task,
+                                                run_id,
+                                                chunks=run_id - 1,
+                                                mask=mask_subj)
 
         # convert event to sample attribute, assign as target
-        subj_data.sa['targets'] = events2sample_attr(run_events,
-                                                     subj_data.sa.time_coords,
-                                                     noinfolabel='base')
+        run_data.sa['targets'] = events2sample_attr(run_events,
+                                                    run_data.sa.time_coords,
+                                                    noinfolabel='base')
 
         # write list
-        run_data.append(subj_data)
+        run_data.append(run_data)
 
     # merge datasets, a=0 means attributes for first
     #   set should be used for all data
@@ -167,9 +167,14 @@ def func_make_hdf5(mkhd_data_path, mkhd_hdf5_path, mkhd_model_dict):
 
     Load all data in mvpa/sub*, save to
         mkhd_hdf5_path.
+
+    Update - dhandle.get_bold_run_model() seems not to be able
+        to handle different tasks, but stupidly loads all task
+        data. Reverted to manual way of making data.
+            Will this break the classifier?
     """
     # # For testing
-    # par_path = "/Users/nmuncy/Projects/learn_mvpa"
+    # main_par_path = "/Users/nmuncy/Projects/learn_mvpa"
     # mkhd_data_path = os.path.join(main_par_path, "mvpa")
     # mkhd_hdf5_path = os.path.join(mkhd_data_path, "hdf5")
     # mkhd_model_dict = {1: {"Train": 1, "Test": 2}}
@@ -181,22 +186,30 @@ def func_make_hdf5(mkhd_data_path, mkhd_hdf5_path, mkhd_model_dict):
 
     # make train, test hdf5 files for each planned model
     for model in mkhd_model_dict:
+        # model = 1
+        print "model{}".format(model)
+
         for data_type in mkhd_model_dict[model]:
+            # data_type = "Train"
+            print data_type
 
             # set task, model, out_file string
             task = mkhd_model_dict[model][data_type]
-            # model = 1
+            print "task{}".format(task)
             out_file = os.path.join(
-                mkhd_hdf5_path, "data_{}.hdf5.gz".format(data_type))
+                mkhd_hdf5_path, "model{}_data_{}.hdf5.gz".format(model, data_type))
             if not os.path.exists(out_file):
 
                 # load data
                 group_data = []
                 for subj in dhandle.get_task_bold_run_ids(task):
+                    # subj = 5
+                    print "sub{}".format(subj)
 
-                    run_data = []
+                    subj_data = []
                     for run_id in dhandle.get_task_bold_run_ids(task)[subj]:
-                        print run_id
+                        # run_id = 1
+                        print "run{}".format(run_id)
 
                         # pad
                         if subj < 10:
@@ -208,47 +221,61 @@ def func_make_hdf5(mkhd_data_path, mkhd_hdf5_path, mkhd_model_dict):
                         mask_fname = os.path.join(mkhd_data_path, subj_num,
                                                   "masks/orig/Group_Int_Mask.nii.gz")
 
-                        # get model
-                        run_events = dhandle.get_bold_run_model(
-                            model, subj, run_id)
+                        # get model - this seems to be the problem - loads events from both tasks!
+                        # run_events = dhandle.get_bold_run_model(
+                        #     model, subj, run_id)
 
-                        # get data
-                        subj_data = dhandle.get_bold_run_dataset(subj,
-                                                                 task,
-                                                                 run_id,
-                                                                 chunks=run_id - 1,
-                                                                 mask=mask_fname)
+                        tmp_re = os.path.join(
+                            mkhd_data_path, subj_num, "BOLD", "task00{}_run00{}".format(task, run_id), "attributes.txt")
+                        run_events = SampleAttributes(tmp_re)
+                        # print np.unique(run_events.targets)
+                        # print len(run_events.targets)
+
+                        # # get data
+                        # run_data = dhandle.get_bold_run_dataset(subj,
+                        #                                          task,
+                        #                                          run_id,
+                        #                                          chunks=run_id - 1,
+                        #                                          mask=mask_fname)
 
                         # get behavior events
-                        subj_data.sa['targets'] = events2sample_attr(run_events,
-                                                                     subj_data.sa.time_coords,
-                                                                     noinfolabel='base')
+                        # run_data.sa['targets'] = events2sample_attr(run_events,
+                        #                                              run_data.sa.time_coords,
+                        #                                              noinfolabel='base')
+
+                        tmp_rd = os.path.join(mkhd_data_path, subj_num, "BOLD",
+                                              "task00{}_run00{}".format(task, run_id), "bold.nii.gz")
+                        run_data = fmri_dataset(samples=tmp_rd, targets=run_events.targets,
+                                                chunks=run_events.chunks, mask=mask_fname)
+                        # print run_data.summary()
 
                         # clean, save
-                        subj_data = subj_data[subj_data.sa.targets != 'base']
-                        subj_data = subj_data[subj_data.sa.targets != 'num']
-                        run_data.append(subj_data)
+                        run_data = run_data[run_data.sa.targets != 'base']
+                        run_data = run_data[run_data.sa.targets != 'num']
+                        print run_data.summary()
 
-                    # check that number of voxels (length) is equal across subjs
-                    #   this is a result of the mask
-                    print subj_data.fa.values()
+                        subj_data.append(run_data)
+                        del run_data
+
+                    # # check that number of voxels (length) is equal across subjs
+                    # #   this is a result of the mask
+                    # print run_data.fa.values()
 
                     # append list, collapse across runs
-                    group_data.append(vstack(run_data, a=0))
+                    group_data.append(vstack(subj_data, a=0))
+                    del subj_data
 
-                # save all data as one file
+                # save all data as one file, clean
                 mvpa2.base.hdf5.h5save(out_file,
                                        group_data,
                                        mode='w',
                                        mkdir=True,
                                        compression="gzip")
 
-            # free ram
-            del subj_data
-            del group_data
-            del run_data
+                del group_data
 
 
+# %%
 def func_train(hdf5_path, group_path):
     # %%
     """
