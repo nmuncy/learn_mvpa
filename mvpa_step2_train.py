@@ -16,6 +16,7 @@ from mvpa2.suite import *
 import os
 import gc
 import sys
+import json
 
 
 # %%
@@ -473,13 +474,6 @@ def func_train(hdf5_path, group_path):
 
 # %%
 def main():
-    """
-    model001 = loc, BE data
-        task001 = loc - training data
-        task002 = BE - test data
-
-    main_model_dict = {<model num>: {"Train": <task num>, "Test": <task num>}}
-    """
 
     # set up
     main_par_path = sys.argv[1]
@@ -488,8 +482,9 @@ def main():
     main_data_path = os.path.join(main_par_path, "mvpa")
     main_hd5f_path = os.path.join(main_data_path, "hdf5")
 
-    # make model dict
-    main_model_dict = {1: {"Train": 1, "Test": 2}}
+    # get model dict
+    with open(os.path.join(main_data_path, "model_dict.json")) as json_file:
+        main_model_dict = json.load(json_file)
 
     # make hdf5 datasets
     if not os.path.exists(main_hd5f_path):
