@@ -74,15 +74,19 @@ fsclf = FeatureSelectionClassifier(clf, sbfs)
 #                         errorfx=lambda p, t: np.mean(p == t),
 #                         enable_ca=['stats'])
 
-# within
-cvws = CrossValidation(
-    fsclf, NFoldPartitioner(attr="chunks"), errorfx=mean_match_accuracy
-)
 
-# between
-cvbs = CrossValidation(
-    fsclf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy
-)
+# Don't cross validate
+# # within
+# cvws = CrossValidation(
+#     fsclf, NFoldPartitioner(attr="chunks"), errorfx=mean_match_accuracy
+# )
+
+# # between
+# cvbs = CrossValidation(
+#     fsclf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy
+# )
+
+fsclf.train(fds_train[0])
 
 
 # %%
@@ -113,11 +117,14 @@ write_out.write(h_out)
 write_out.close()
 
 
-# test
-wsc_results = [cvws(sd) for sd in fds_test]
+# test - does this work?
+# wsc_results = [cvws(sd) for sd in fds_test]
+wsc_results = [fsclf(x) for x in fds_test]
 wsc_results = vstack(wsc_results)
 fds_comb = vstack(fds_test)
-bsc_results = cvbs(fds_comb)
+
+# bsc_results = cvbs(fds_comb)
+bsc_results = fsclf(fds_comb)
 
 
 # %%
