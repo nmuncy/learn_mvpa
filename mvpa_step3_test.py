@@ -7,6 +7,7 @@ Also written for local environment
 """
 
 
+# %%
 from mvpa2.suite import *
 import os
 import gc
@@ -14,215 +15,208 @@ import sys
 import json
 
 
-def func_train(hdf5_path, group_path):
-    """
-    Step 2: Between, Within Classifiers
-    """
+"""
+Step 0: Set up
+"""
+par_path = "/Users/nmuncy/Projects/learn_mvpa"
+group_path = os.path.join(par_path, "grpAnalysis")
+hdf5_path = os.path.join(group_path, "mvpa/hdf5")
 
-    # For testing
-    par_path = "/Users/nmuncy/Projects/learn_mvpa"
-    group_path = os.path.join(par_path, "grpAnalysis")
-    data_path = os.path.join(par_path, "mvpa")
-    hdf5_path = os.path.join(data_path, "hdf5")
+if not os.path.exists(group_path):
+    os.makedirs(group_path)
 
-    # get data
-    fds_train = h5load(os.path.join(hdf5_path, "model1_data_Train.hdf5.gz"))
 
-    for i, sd in enumerate(fds_train):
-        sd.sa["subject"] = np.repeat(i, len(sd))
-    nsubjs = len(fds_train)
-    ncats = len(fds_train[0].UT)
-    nruns = len(fds_train[0].UC)
+# %%
+"""
+Step 1: Train Between, Within Classifiers
+"""
+# get data
+fds_train = h5load(os.path.join(hdf5_path, "model1_data_Train.hdf5.gz"))
 
-    # write out summary
-    h_out = """
-        Number of Subjects: {}
-        Number of Categories: {}
-        Number of Runs: {}
+for i, sd in enumerate(fds_train):
+    sd.sa["subject"] = np.repeat(i, len(sd))
+nsubjs = len(fds_train)
+ncats = len(fds_train[0].UT)
+nruns = len(fds_train[0].UC)
 
-        {}
-    """.format(
-        nsubjs, ncats, nruns, fds_train[0].summary()
-    )
-    write_out = open(os.path.join(group_path, "mvpa_data_summary.txt"), "w")
-    write_out.write(h_out)
-    write_out.close()
+# write out summary
+h_out = """
+    Number of Subjects: {}
+    Number of Categories: {}
+    Number of Runs: {}
 
-    # %%
-    # Set up feature selection
-    #   100 highest anova values
-    clf = LinearCSVMC()
-    nf = 100
-    fselector = FixedNElementTailSelector(nf, tail="upper", mode="select", sort=False)
+    {}
+""".format(
+    nsubjs, ncats, nruns, fds_train[0].summary()
+)
+write_out = open(os.path.join(group_path, "mvpa_data_summary.txt"), "w")
+write_out.write(h_out)
+write_out.close()
 
-    sbfs = SensitivityBasedFeatureSelection(
-        OneWayAnova(), fselector, enable_ca=["sensitivities"]
-    )
+# Set up feature selection
+#   100 highest anova values
+clf = LinearCSVMC()
+nf = 100
+fselector = FixedNElementTailSelector(nf, tail="upper", mode="select", sort=False)
 
-    fsclf = FeatureSelectionClassifier(clf, sbfs)
+sbfs = SensitivityBasedFeatureSelection(
+    OneWayAnova(), fselector, enable_ca=["sensitivities"]
+)
 
-    # Classify within, between
-    #   should errorfx be mean_match_accuracy? or lambda p, t: np.mean(p == t)
+fsclf = FeatureSelectionClassifier(clf, sbfs)
 
-    # cvte = CrossValidation(clf,
-    #                         NFoldPartitioner(),
-    #                         errorfx=lambda p, t: np.mean(p == t),
-    #                         enable_ca=['stats'])
+# Classify within, between
+#   should errorfx be mean_match_accuracy? or lambda p, t: np.mean(p == t)
 
-    cvws = CrossValidation(
-        fsclf, NFoldPartitioner(attr="chunks"), errorfx=mean_match_accuracy
-    )
+# cvte = CrossValidation(clf,
+#                         NFoldPartitioner(),
+#                         errorfx=lambda p, t: np.mean(p == t),
+#                         enable_ca=['stats'])
 
-    cvbs = CrossValidation(
-        fsclf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy
-    )
+cvws = CrossValidation(
+    fsclf, NFoldPartitioner(attr="chunks"), errorfx=mean_match_accuracy
+)
 
-    # %%
-    # run classifier
-    #   TODO need to call tested samples the same
+cvbs = CrossValidation(
+    fsclf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy
+)
 
-    # get test data
-    fds_test = h5load(os.path.join(hdf5_path, "model1_data_Test.hdf5.gz"))
 
-    for i, sd in enumerate(fds_test):
-        sd.sa["subject"] = np.repeat(i, len(sd))
+# %%
+"""
+Step 2: Test classifiers
+"""
+# get test data
+fds_test = h5load(os.path.join(hdf5_path, "model1_data_Test.hdf5.gz"))
 
-    # test
-    wsc_results = [cvws(sd) for sd in fds_test]
-    wsc_results = vstack(wsc_results)
-    fds_comb = vstack(fds_test)
-    bsc_results = cvbs(fds_comb)
+for i, sd in enumerate(fds_test):
+    sd.sa["subject"] = np.repeat(i, len(sd))
 
-    # %%
-    """
-    Step 3: Hyperalignment
-    """
-    # classifier
-    cv = CrossValidation(
-        clf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy
-    )
+# test
+wsc_results = [cvws(sd) for sd in fds_test]
+wsc_results = vstack(wsc_results)
+fds_comb = vstack(fds_test)
+bsc_results = cvbs(fds_comb)
 
-    bsc_hyper_results = []
-    for test_run in range(nruns):
 
-        ds_train = [sd[sd.sa.chunks != test_run, :] for sd in fds_train]
-        ds_test = [sd[sd.sa.chunks == test_run, :] for sd in fds_train]
+# %%
+"""
+Step 3: Train, Test Hyperalignment
+"""
+# classifier
+cv = CrossValidation(clf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy)
 
-        anova = OneWayAnova()
-        fscores = [anova(sd) for sd in ds_train]
-        featsels = [StaticFeatureSelection(fselector(fscore)) for fscore in fscores]
-        ds_train_fs = [fs.forward(sd) for fs, sd in zip(featsels, ds_train)]
+bsc_hyper_results = []
+for test_run in range(nruns):
 
-        hyper = Hyperalignment()
-        hypmaps = hyper(ds_train_fs)
+    ds_train = [sd[sd.sa.chunks != test_run, :] for sd in fds_train]
+    ds_test = [sd[sd.sa.chunks == test_run, :] for sd in fds_train]
 
-        ds_test_fs = [fs.forward(sd) for fs, sd in zip(featsels, ds_test)]
-        ds_hyper = [h.forward(sd) for h, sd in zip(hypmaps, ds_test_fs)]
-
-        ds_hyper = vstack(ds_hyper)
-        zscore(ds_hyper, chunks_attr="subject")
-        res_cv = cv(ds_hyper)
-        bsc_hyper_results.append(res_cv)
-
-    bsc_hyper_results = hstack(bsc_hyper_results)
-
-    # Compare Classifiers
-    h_out = """
-        Classifier = LinearSVM
-        Cross-validation = NFoldPartitioner (subject)
-
-        Average Classification Accuracies
-            Within-Subject: {} +/- {}
-            Between-Subject: {} +/- {}
-            Hyper Between-Subject: {} +/- {}
-    """.format(
-        round(np.mean(wsc_results), 2),
-        round(np.std(wsc_results) / np.sqrt(nsubjs - 1), 3),
-        round(np.mean(bsc_results), 2),
-        round(np.std(np.mean(bsc_results, axis=1)) / np.sqrt(nsubjs - 1), 3),
-        round(np.mean(bsc_hyper_results), 2),
-        round(np.std(np.mean(bsc_hyper_results, axis=1)) / np.sqrt(nsubjs - 1), 3),
-    )
-
-    write_out = open(os.path.join(group_path, "mvpa_stats_classifiers.txt"), "w")
-    write_out.write(h_out)
-    write_out.close()
-
-    # %%
-    # Similarity
     anova = OneWayAnova()
-    fscores = [anova(sd) for sd in fds_train]
-    fscores = np.mean(np.asarray(vstack(fscores)), axis=0)
+    fscores = [anova(sd) for sd in ds_train]
+    featsels = [StaticFeatureSelection(fselector(fscore)) for fscore in fscores]
+    ds_train_fs = [fs.forward(sd) for fs, sd in zip(featsels, ds_train)]
 
-    ds_fs = [sd[:, fselector(fscores)] for sd in fds_train]
     hyper = Hyperalignment()
-    mappers = hyper(ds_fs)
-    ds_hyper = [m.forward(ds_) for m, ds_ in zip(mappers, ds_fs)]
+    hypmaps = hyper(ds_train_fs)
 
-    sm_orig = [
-        np.corrcoef(sd.get_mapped(mean_group_sample(["targets"])).samples)
-        for sd in ds_fs
-    ]
-    sm_orig_mean = np.mean(sm_orig, axis=0)
-
-    sm_hyper_mean = np.mean(
-        [
-            np.corrcoef(sd.get_mapped(mean_group_sample(["targets"])).samples)
-            for sd in ds_hyper
-        ],
-        axis=0,
-    )
+    ds_test_fs = [fs.forward(sd) for fs, sd in zip(featsels, ds_test)]
+    ds_hyper = [h.forward(sd) for h, sd in zip(hypmaps, ds_test_fs)]
 
     ds_hyper = vstack(ds_hyper)
-    sm_hyper = np.corrcoef(ds_hyper.get_mapped(mean_group_sample(["targets"])))
+    zscore(ds_hyper, chunks_attr="subject")
+    res_cv = cv(ds_hyper)
+    bsc_hyper_results.append(res_cv)
 
-    ds_fs = vstack(ds_fs)
-    sm_anat = np.corrcoef(ds_fs.get_mapped(mean_group_sample(["targets"])))
-
-    intended_label_order = [0, 1]
-    labels = fds_train[0].UT
-    labels = labels[intended_label_order]
-
-    pl.figure(figsize=(12, 12))
-    # plot all three similarity structures
-    for i, sm_t in enumerate(
-        (
-            (sm_orig_mean, "Average within-subject\nsimilarity"),
-            (sm_anat, "Similarity of group average\ndata (anatomically aligned)"),
-            (sm_hyper_mean, "Average within-subject\nsimilarity (hyperaligned data)"),
-            (sm_hyper, "Similarity of group average\ndata (hyperaligned)"),
-        )
-    ):
-        sm, title = sm_t
-        # reorder matrix columns to match label order
-        sm = sm[intended_label_order][:, intended_label_order]
-        pl.subplot(2, 2, i + 1)
-        pl.imshow(sm, vmin=-1.0, vmax=1.0, interpolation="nearest")
-        pl.colorbar(shrink=0.4, ticks=[-1, 0, 1])
-        pl.title(title, size=12)
-        ylim = pl.ylim()
-        pl.xticks(
-            range(ncats), labels, size="small", stretch="ultra-condensed", rotation=45
-        )
-        pl.yticks(
-            range(ncats), labels, size="small", stretch="ultra-condensed", rotation=45
-        )
-        pl.ylim(ylim)
-
-    pl.savefig(os.path.join(group_path, "mvpa_plot_classifiers.png"))
+bsc_hyper_results = hstack(bsc_hyper_results)
 
 
-def main():
+# %%
+"""
+Step 4: Compare Classifiers
+"""
+h_out = """
+    Classifier = LinearSVM
+    Cross-validation = NFoldPartitioner (subject)
 
-    # set up
-    # main_par_path = sys.argv[1]
-    main_par_path = "/Users/nmuncy/Projects/learn_mvpa"
-    main_group_path = os.path.join(main_par_path, "grpAnalysis")
-    main_data_path = os.path.join(main_par_path, "mvpa/hdf5")
+    Average Classification Accuracies
+        Within-Subject: {} +/- {}
+        Between-Subject: {} +/- {}
+        Hyper Between-Subject: {} +/- {}
+""".format(
+    round(np.mean(wsc_results), 2),
+    round(np.std(wsc_results) / np.sqrt(nsubjs - 1), 3),
+    round(np.mean(bsc_results), 2),
+    round(np.std(np.mean(bsc_results, axis=1)) / np.sqrt(nsubjs - 1), 3),
+    round(np.mean(bsc_hyper_results), 2),
+    round(np.std(np.mean(bsc_hyper_results, axis=1)) / np.sqrt(nsubjs - 1), 3),
+)
 
-    # run classifier
-    func_train(main_data_path, main_group_path)
+write_out = open(os.path.join(group_path, "mvpa_stats_classifiers.txt"), "w")
+write_out.write(h_out)
+write_out.close()
 
 
-if __name__ == "__main__":
-    main()
+# %%
+"""
+Step 5: Show Similarity
+"""
+anova = OneWayAnova()
+fscores = [anova(sd) for sd in fds_train]
+fscores = np.mean(np.asarray(vstack(fscores)), axis=0)
+
+ds_fs = [sd[:, fselector(fscores)] for sd in fds_train]
+hyper = Hyperalignment()
+mappers = hyper(ds_fs)
+ds_hyper = [m.forward(ds_) for m, ds_ in zip(mappers, ds_fs)]
+
+sm_orig = [
+    np.corrcoef(sd.get_mapped(mean_group_sample(["targets"])).samples) for sd in ds_fs
+]
+sm_orig_mean = np.mean(sm_orig, axis=0)
+
+sm_hyper_mean = np.mean(
+    [
+        np.corrcoef(sd.get_mapped(mean_group_sample(["targets"])).samples)
+        for sd in ds_hyper
+    ],
+    axis=0,
+)
+
+ds_hyper = vstack(ds_hyper)
+sm_hyper = np.corrcoef(ds_hyper.get_mapped(mean_group_sample(["targets"])))
+
+ds_fs = vstack(ds_fs)
+sm_anat = np.corrcoef(ds_fs.get_mapped(mean_group_sample(["targets"])))
+
+intended_label_order = [0, 1]
+labels = fds_train[0].UT
+labels = labels[intended_label_order]
+
+pl.figure(figsize=(12, 12))
+# plot all three similarity structures
+for i, sm_t in enumerate(
+    (
+        (sm_orig_mean, "Average within-subject\nsimilarity"),
+        (sm_anat, "Similarity of group average\ndata (anatomically aligned)"),
+        (sm_hyper_mean, "Average within-subject\nsimilarity (hyperaligned data)"),
+        (sm_hyper, "Similarity of group average\ndata (hyperaligned)"),
+    )
+):
+    sm, title = sm_t
+    # reorder matrix columns to match label order
+    sm = sm[intended_label_order][:, intended_label_order]
+    pl.subplot(2, 2, i + 1)
+    pl.imshow(sm, vmin=-1.0, vmax=1.0, interpolation="nearest")
+    pl.colorbar(shrink=0.4, ticks=[-1, 0, 1])
+    pl.title(title, size=12)
+    ylim = pl.ylim()
+    pl.xticks(
+        range(ncats), labels, size="small", stretch="ultra-condensed", rotation=45
+    )
+    pl.yticks(
+        range(ncats), labels, size="small", stretch="ultra-condensed", rotation=45
+    )
+    pl.ylim(ylim)
+
+pl.savefig(os.path.join(group_path, "mvpa_plot_classifiers.png"))
