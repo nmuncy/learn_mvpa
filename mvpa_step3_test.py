@@ -94,6 +94,23 @@ fds_test = h5load(os.path.join(hdf5_path, "model1_data_Test.hdf5.gz"))
 
 for i, sd in enumerate(fds_test):
     sd.sa["subject"] = np.repeat(i, len(sd))
+test_nsubj = len(fds_test)
+test_ncats = len(fds_test[0].UT)
+test_nruns = len(fds_test[0].UC)
+
+# write out summary
+h_out = """
+    Number of Subjects: {}
+    Number of Categories: {}
+    Number of Runs: {}
+
+    {}
+""".format(
+    test_nsubj, test_ncats, test_nruns, fds_test[0].summary()
+)
+write_out = open(os.path.join(group_path, "mvpa_test_summary.txt"), "w")
+write_out.write(h_out)
+write_out.close()
 
 
 # test
