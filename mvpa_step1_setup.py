@@ -116,6 +116,7 @@ def func_split(
 
 
 def func_timing(
+    tim_dcn_list,
     tim_beh_list,
     tim_len_tr,
     tim_subj_dir,
@@ -126,26 +127,23 @@ def func_timing(
     tim_mvpa_dir,
 ):
 
-    # # For testing
-    # tim_beh_list = task_dict["Study"]["FP"]
-    # tim_subj_dir = subj_dir
-    # tim_phase = "Study"
-    # tim_dcn_str = "Study_FP"
-    # tim_task_num = 3
-
+    """
+    Make attributes files
+    """
     # determine tim_phase length in seconds
     h_dict = func_lenRun(tim_subj_dir, tim_dcn_str, tim_phase)
     len_sec = h_dict["LRun"] * tim_len_tr
 
     # split timing files into 1D
-    for beh in tim_beh_list:
+    #   this was updated to rename attributes
+    for dcn, beh in zip(tim_dcn_list, tim_beh_list):
         if not os.path.exists(
             os.path.join(tim_subj_dir, f"tmp_tf_{tim_phase}_{beh}_r01.1D")
         ):
 
             # determine behavior duration, get 1st number in column 0
             data_raw = pd.read_csv(
-                os.path.join(tim_subj_dir, f"dur_{tim_phase}_{beh}.txt"), header=None
+                os.path.join(tim_subj_dir, f"dur_{tim_phase}_{dcn}.txt"), header=None
             )
             data_clean = data_raw[0].str.split("\t", expand=True)
             for value in data_clean[0]:
@@ -156,7 +154,7 @@ def func_timing(
             # make 1D file per run
             h_cmd = f"""
                 module load afni-20.2.06
-                timing_tool.py -timing {tim_subj_dir}/tf_{tim_phase}_{beh}.txt \
+                timing_tool.py -timing {tim_subj_dir}/tf_{tim_phase}_{dcn}.txt \
                     -tr {tim_len_tr} -stim_dur {beh_dur} -run_len {len_sec} -timing_to_1D \
                     {tim_subj_dir}/tmp_tf_{tim_phase}_{beh} -per_run_file
             """
@@ -206,6 +204,9 @@ def func_timing(
         )
         np.savetxt(h_out, df_att[col_select].values, fmt="%s", delimiter=" ")
 
+        """
+        Make onset times
+        """
         # make onset times for each task/run
         model_out = os.path.join(
             tim_mvpa_dir,
@@ -231,18 +232,15 @@ def func_timing(
             # determine start, duration of each block in volume time
             df_ons = pd.DataFrame(ons_dict)
             df_ons["ons"] = round((df_ons["Start"] * tim_len_tr), 1)
-            df_ons["dur"] = round(
-                ((df_ons["End"] - df_ons["Start"]) * tim_len_tr), 1)
+            df_ons["dur"] = round(((df_ons["End"] - df_ons["Start"]) * tim_len_tr), 1)
             df_ons["one"] = 1
 
             # write
             col_select = ["ons", "dur", "one"]
             h_out = os.path.join(model_out, f"cond00{cc+1}.txt")
-            np.savetxt(h_out, df_ons[col_select].values,
-                       fmt="%s", delimiter=" ")
+            np.savetxt(h_out, df_ons[col_select].values, fmt="%s", delimiter=" ")
 
 
-# %%
 def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
     """
     Step 1: Detrend
@@ -256,9 +254,8 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
     # len_tr = 1.76
     # task_dict = {
     #     "loc": ["face", "scene", "num"],
-    #     "Study": {"BE": ["Bfe", "Bse"], "FP": ["Ffpc", "Ffpi", "Fspc", "Fspi"]},
+    #     "Study": {"BE": [["Bfe", "Bse"], ["face", "scene"]]},
     # }
-    # beh_dur = 1
     # der_dir = "/scratch/madlab/nate_vCAT/derivatives"
     # model = "model001"
 
@@ -274,8 +271,7 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
             if not os.path.exists(
                 os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
             ):
-                func_detrend(subj_dir, decon_str,
-                             task_dict[phase], len_tr, subj_num)
+                func_detrend(subj_dir, decon_str, task_dict[phase], len_tr, subj_num)
         elif type(task_dict[phase]) == dict:
             for decon in task_dict[phase]:
                 decon_str = f"{phase}_{decon}"
@@ -321,8 +317,7 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
     for phase in task_dict:
         if type(task_dict[phase]) == list:
             h_str = f"{phase}_decon"
-            func_split(subj_dir, phase, h_str, task_count,
-                       subj_num, len_tr, mvpa_dir)
+            func_split(subj_dir, phase, h_str, task_count, subj_num, len_tr, mvpa_dir)
             task_count += 1
         elif type(task_dict[phase]) == dict:
             for decon in task_dict[phase]:
@@ -360,6 +355,7 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
         if type(task_dict[phase]) == list:
             func_timing(
                 task_dict[phase],
+                task_dict[phase],
                 len_tr,
                 subj_dir,
                 phase,
@@ -372,7 +368,8 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
         elif type(task_dict[phase]) == dict:
             for decon in task_dict[phase]:
                 func_timing(
-                    task_dict[phase][decon],
+                    task_dict[phase][decon][0],
+                    task_dict[phase][decon][1],
                     len_tr,
                     subj_dir,
                     phase,

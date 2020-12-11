@@ -163,7 +163,6 @@ def func_submit(
             --wrap="~/miniconda3/bin/python {sub_code_dir}/mvpa_step1_setup.py \
                 {subj} {subj_dir} {sub_len_tr} {sub_deriv_dir} {sub_model}"
         """
-
         sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
         job_id = sbatch_submit.communicate()[0]
         print(job_id)
@@ -211,7 +210,7 @@ def main():
     if not os.path.exists(main_mvpa_dir):
         os.makedirs(main_mvpa_dir)
 
-    with open(os.path.join(main_mvpa_dir, "main_task_dict.json"), "w") as outfile:
+    with open(os.path.join(main_mvpa_dir, "task_dict.json"), "w") as outfile:
         json.dump(main_task_dict, outfile)
 
     """
