@@ -20,7 +20,7 @@ Step 0: Set up
 """
 par_path = "/Users/nmuncy/Projects/learn_mvpa"
 group_path = os.path.join(par_path, "grpAnalysis")
-hdf5_path = os.path.join(group_path, "mvpa/hdf5")
+hdf5_path = os.path.join(par_path, "mvpa/hdf5")
 
 if not os.path.exists(group_path):
     os.makedirs(group_path)
@@ -35,9 +35,9 @@ fds_train = h5load(os.path.join(hdf5_path, "model1_data_Train.hdf5.gz"))
 
 for i, sd in enumerate(fds_train):
     sd.sa["subject"] = np.repeat(i, len(sd))
-nsubjs = len(fds_train)
-ncats = len(fds_train[0].UT)
-nruns = len(fds_train[0].UC)
+train_nsubj = len(fds_train)
+train_ncats = len(fds_train[0].UT)
+train_nruns = len(fds_train[0].UC)
 
 # write out summary
 h_out = """
@@ -47,17 +47,19 @@ h_out = """
 
     {}
 """.format(
-    nsubjs, ncats, nruns, fds_train[0].summary()
+    train_nsubj, train_ncats, train_nruns, fds_train[0].summary()
 )
-write_out = open(os.path.join(group_path, "mvpa_data_summary.txt"), "w")
+write_out = open(os.path.join(group_path, "mvpa_train_summary.txt"), "w")
 write_out.write(h_out)
 write_out.close()
 
+# %%
 # Set up feature selection
 #   100 highest anova values
 clf = LinearCSVMC()
 nf = 100
-fselector = FixedNElementTailSelector(nf, tail="upper", mode="select", sort=False)
+fselector = FixedNElementTailSelector(
+    nf, tail="upper", mode="select", sort=False)
 
 sbfs = SensitivityBasedFeatureSelection(
     OneWayAnova(), fselector, enable_ca=["sensitivities"]
@@ -67,16 +69,17 @@ fsclf = FeatureSelectionClassifier(clf, sbfs)
 
 # Classify within, between
 #   should errorfx be mean_match_accuracy? or lambda p, t: np.mean(p == t)
-
 # cvte = CrossValidation(clf,
 #                         NFoldPartitioner(),
 #                         errorfx=lambda p, t: np.mean(p == t),
 #                         enable_ca=['stats'])
 
+# within
 cvws = CrossValidation(
     fsclf, NFoldPartitioner(attr="chunks"), errorfx=mean_match_accuracy
 )
 
+# between
 cvbs = CrossValidation(
     fsclf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy
 )
@@ -92,6 +95,7 @@ fds_test = h5load(os.path.join(hdf5_path, "model1_data_Test.hdf5.gz"))
 for i, sd in enumerate(fds_test):
     sd.sa["subject"] = np.repeat(i, len(sd))
 
+
 # test
 wsc_results = [cvws(sd) for sd in fds_test]
 wsc_results = vstack(wsc_results)
@@ -104,7 +108,8 @@ bsc_results = cvbs(fds_comb)
 Step 3: Train, Test Hyperalignment
 """
 # classifier
-cv = CrossValidation(clf, NFoldPartitioner(attr="subject"), errorfx=mean_match_accuracy)
+cv = CrossValidation(clf, NFoldPartitioner(
+    attr="subject"), errorfx=mean_match_accuracy)
 
 bsc_hyper_results = []
 for test_run in range(nruns):
@@ -114,7 +119,8 @@ for test_run in range(nruns):
 
     anova = OneWayAnova()
     fscores = [anova(sd) for sd in ds_train]
-    featsels = [StaticFeatureSelection(fselector(fscore)) for fscore in fscores]
+    featsels = [StaticFeatureSelection(fselector(fscore))
+                for fscore in fscores]
     ds_train_fs = [fs.forward(sd) for fs, sd in zip(featsels, ds_train)]
 
     hyper = Hyperalignment()
