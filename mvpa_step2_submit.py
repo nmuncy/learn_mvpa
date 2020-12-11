@@ -41,11 +41,11 @@ def main():
     h_err = os.path.join(out_dir, "err.txt")
 
     # submit command
-    # --account iacc_madlab --qos pq_madlab \
     sbatch_job = """
         sbatch \
         -J "MVPA2" -t 10:00:00 --mem=4000 --ntasks-per-node=10 \
         -p centos7_IB_44C_512G  -o {} -e {} \
+        --account iacc_madlab --qos pq_madlab \
         --wrap="/home/data/madlab/envs/mvpa_env/bin/python {}/mvpa_step2_build.py {}"
     """.format(
         h_out, h_err, code_dir, deriv_dir

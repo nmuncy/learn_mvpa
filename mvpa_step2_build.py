@@ -3,12 +3,8 @@ Notes
 
 Written for Python 2.7 <-------------!!!
 
-TODO:
-    1) Train for specific categories in block set?
-    2) Verify that I am using separate data for
-        determining hyperalignment parameter and
-        training classifier
-    3) Train on loc phase, test on vCAT phase
+This builds hdf5 files from the dataset, used
+    for training, testing.
 """
 
 # %%
@@ -296,7 +292,6 @@ def main():
 
     # set up
     main_par_path = sys.argv[1]
-    # main_par_path = "/Users/nmuncy/Projects/learn_mvpa"
     main_group_path = os.path.join(main_par_path, "grpAnalysis")
     main_data_path = os.path.join(main_par_path, "mvpa")
     main_hd5f_path = os.path.join(main_data_path, "hdf5")
