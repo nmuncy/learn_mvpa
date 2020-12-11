@@ -231,13 +231,15 @@ def func_timing(
             # determine start, duration of each block in volume time
             df_ons = pd.DataFrame(ons_dict)
             df_ons["ons"] = round((df_ons["Start"] * tim_len_tr), 1)
-            df_ons["dur"] = round(((df_ons["End"] - df_ons["Start"]) * tim_len_tr), 1)
+            df_ons["dur"] = round(
+                ((df_ons["End"] - df_ons["Start"]) * tim_len_tr), 1)
             df_ons["one"] = 1
 
             # write
             col_select = ["ons", "dur", "one"]
             h_out = os.path.join(model_out, f"cond00{cc+1}.txt")
-            np.savetxt(h_out, df_ons[col_select].values, fmt="%s", delimiter=" ")
+            np.savetxt(h_out, df_ons[col_select].values,
+                       fmt="%s", delimiter=" ")
 
 
 # %%
@@ -265,13 +267,15 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
     subj_num = subj.split("-")[1]
     mvpa_dir = os.path.join(der_dir, f"mvpa/sub{subj_num}")
 
+    # detrend data
     for phase in task_dict:
         if type(task_dict[phase]) == list:
             decon_str = f"{phase}_decon"
             if not os.path.exists(
                 os.path.join(subj_dir, f"MVPA_{decon_str}_all+tlrc.HEAD")
             ):
-                func_detrend(subj_dir, decon_str, task_dict[phase], len_tr, subj_num)
+                func_detrend(subj_dir, decon_str,
+                             task_dict[phase], len_tr, subj_num)
         elif type(task_dict[phase]) == dict:
             for decon in task_dict[phase]:
                 decon_str = f"{phase}_{decon}"
@@ -317,7 +321,8 @@ def func_job(subj, subj_dir, len_tr, task_dict, der_dir, model):
     for phase in task_dict:
         if type(task_dict[phase]) == list:
             h_str = f"{phase}_decon"
-            func_split(subj_dir, phase, h_str, task_count, subj_num, len_tr, mvpa_dir)
+            func_split(subj_dir, phase, h_str, task_count,
+                       subj_num, len_tr, mvpa_dir)
             task_count += 1
         elif type(task_dict[phase]) == dict:
             for decon in task_dict[phase]:
