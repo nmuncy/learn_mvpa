@@ -29,7 +29,7 @@ def func_sbatch(command, wall_hours, mem_gig, num_proc, h_str, work_dir):
     sbatch_job = f"""
         sbatch \
         -J {h_str} -t {wall_hours}:00:00 --mem={mem_gig}000 --ntasks-per-node={num_proc} \
-        -p centos7_IB_44C_512G -o {full_name}.out -e {full_name}.err \
+        -p IB_44C_512G -o {full_name}.out -e {full_name}.err \
         --account iacc_madlab --qos pq_madlab \
         --wrap="module load afni-20.2.06 \n {command}"
     """
@@ -76,7 +76,7 @@ def func_dcm2nii(
         # write, submit job
         if not os.path.exists(os.path.join(out_dir, f"{out_str}.nii.gz")):
             h_cmd = f"""
-                module load dcm2niix
+                module load dcm2niix-1.0.20190902
                 dcm2niix -b y -ba y -z y -o {out_dir} -f {out_str} {os.path.join(scan_dir, tmp_scan, "resources/DICOM/files")}
             """
             subj_num = subj.split("-")[1]

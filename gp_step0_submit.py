@@ -46,17 +46,18 @@ def main():
 
     # submit jobs
     for i in tar_list:
-        # i = tar_list[0]
+        # i = tar_list[1]
 
         tar_file = i.split("/")[-1]
         tar_str = tar_file.split(".")[0]
         h_out = os.path.join(slurm_dir, f"out_{tar_str}.txt")
         h_err = os.path.join(slurm_dir, f"err_{tar_str}.txt")
 
+        # -p centos7_IB_44C_512G
         sbatch_job = f"""
             sbatch \
             -J "GP0{i.split("-")[3]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
-            -p centos7_IB_44C_512G  -o {h_out} -e {h_err} \
+            -p IB_44C_512G -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
             python {code_dir}/gp_step0_dcm2nii.py {tar_file} {tar_dir} {work_dir} {slurm_dir}"
