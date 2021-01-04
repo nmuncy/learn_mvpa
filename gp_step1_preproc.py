@@ -517,7 +517,7 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list, blip_tog):
             os.path.join(work_dir, f"final_mask_{h_tiss}_eroded+tlrc.HEAD")
         ):
             h_cmd = f"""
-                module load c3d/1.0.0
+                module load c3d-1.0.0-gcc-8.2.0
                 cd {work_dir}
 
                 c3d {atropos_dir}/Prior{i}.nii.gz -thresh 0.3 1 1 0 \

@@ -62,7 +62,7 @@ def main():
                 sbatch_job = f"""
                     sbatch \
                         -J "GP1{i.split("-")[1]}" -t 10:00:00 --mem=4000 --ntasks-per-node=1 \
-                        -p centos7_IB_44C_512G  -o {h_out} -e {h_err} \
+                        -p IB_44C_512G  -o {h_out} -e {h_err} \
                         --account iacc_madlab --qos pq_madlab \
                         --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
                         python {code_dir}/gp_step1_preproc.py {i} {j} \
