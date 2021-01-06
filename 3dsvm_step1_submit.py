@@ -5,10 +5,19 @@ Notes
 # %%
 import os
 import time
+import json
 import fnmatch
 import subprocess
 from datetime import datetime
 from gp_step0_dcm2nii import func_sbatch
+
+
+# %%
+# set up
+sess = "ses-S1"
+deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
+code_dir = "/home/nmuncy/compute/learn_mvpa"
+task_dict = {"loc": ["face", "scene", "num"], "Study": {"BE": ["Bfe", "Bse"]}}
 
 
 # %%
@@ -63,57 +72,48 @@ def func_mask(msk_deriv_dir, msk_subj_list):
             # subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE).wait()
 
 
-def func_submit(
-    sub_code_dir, sub_deriv_dir, sub_subj_list, sub_sess, sub_model, sub_len_tr
-):
-    """
-    Submit job for each subject
-    """
-    # set up stdout/err capture
-    current_time = datetime.now()
-    out_dir = os.path.join(
-        sub_deriv_dir, f'Slurm_out/SVM1_{current_time.strftime("%H%M_%d-%m-%y")}'
-    )
-    os.makedirs(out_dir)
-
-    for subj in sub_subj_list:
-        # subj = sub_subj_list[0]
-
-        # Set stdout/err file
-        h_out = os.path.join(out_dir, f"out_{subj}.txt")
-        h_err = os.path.join(out_dir, f"err_{subj}.txt")
-
-        # submit command
-        subj_dir = os.path.join(sub_deriv_dir, subj, sub_sess)
-        sbatch_job = f"""
-            sbatch \
-            -J "SVM1{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
-            -p IB_44C_512G  -o {h_out} -e {h_err} \
-            --account iacc_madlab --qos pq_madlab \
-            --wrap="~/miniconda3/bin/python {sub_code_dir}/3dsvm_step1_setup.py \
-                {subj} {subj_dir} {sub_len_tr} {sub_deriv_dir} {sub_model}"
-        """
-        sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
-        job_id = sbatch_submit.communicate()[0]
-        print(job_id)
-        time.sleep(1)
-
-
 # %%
 def main():
 
-    main_deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
-    main_task_dict = {
-        "loc": ["face", "scene", "num"],
-        "Study": {"BE": [["Bfe", "Bse"], ["face", "scene"]]},
-    }
-
-    # Make intersection mask
-    subj_list = [x for x in os.listdir(main_deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
+    """ Step 1: Make Intersection Mask"""
+    subj_list = [x for x in os.listdir(deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
     subj_list.sort()
-    if not os.path.exists(
-        os.path.join(main_deriv_dir, "grpAnalysis/Group_Int_Mask.nii.gz")
-    ):
-        func_mask(main_deriv_dir, subj_list)
+    if not os.path.exists(os.path.join(deriv_dir, "grpAnalysis/Group_Int_Mask.nii.gz")):
+        func_mask(deriv_dir, subj_list)
 
-    # submit job
+    """ Step 2: Submit Jobs"""
+    current_time = datetime.now()
+    out_dir = os.path.join(
+        deriv_dir, f'Slurm_out/SVM1_{current_time.strftime("%H%M_%d-%m-%y")}'
+    )
+    os.makedirs(out_dir)
+
+    # for subj in subj_list:
+    subj = subj_list[0]
+
+    # write json
+    subj_dir = os.path.join(deriv_dir, subj, sess)
+    with open(os.path.join(subj_dir, "task_dict.json"), "w") as outfile:
+        json.dump(task_dict, outfile)
+
+    # Set stdout/err file
+    h_out = os.path.join(out_dir, f"out_{subj}.txt")
+    h_err = os.path.join(out_dir, f"err_{subj}.txt")
+
+    # submit command
+    sbatch_job = f"""
+        sbatch \
+        -J "SVM1{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
+        -p IB_44C_512G  -o {h_out} -e {h_err} \
+        --account iacc_madlab --qos pq_madlab \
+        --wrap="~/miniconda3/bin/python {code_dir}/3dsvm_step1_setup.py \
+            {subj} {sess} {deriv_dir}"
+    """
+    sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
+    job_id = sbatch_submit.communicate()[0]
+    print(job_id)
+    time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
