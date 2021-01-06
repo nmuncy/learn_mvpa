@@ -81,7 +81,7 @@ def main():
             sbatch_job = f"""
                 sbatch \
                 -J "GP3{i.split("-")[1]}" -t 30:00:00 --mem=4000 --ntasks-per-node=1 \
-                -p centos7_IB_44C_512G  -o {h_out} -e {h_err} \
+                -p IB_44C_512G  -o {h_out} -e {h_err} \
                 --account iacc_madlab --qos pq_madlab \
                 --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
                 python {code_dir}/gp_step3_decon.py {i} {j} {decon_type} {deriv_dir}"
