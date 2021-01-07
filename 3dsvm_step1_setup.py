@@ -123,16 +123,17 @@ def func_timing(
     df_att = df_att.replace(np.nan, "base", regex=True)
 
     # add category (cat) column for afni, 0 = base
+    #   update - censor 0 via 9999
     if "base" not in tim_beh_list:
         tim_beh_list.insert(0, "base")
     for cat, beh in enumerate(tim_beh_list):
-        df_att.loc[df_att["att"] == beh, "cat"] = int(cat)
+        df_att.loc[df_att["att"] == beh, "cat"] = cat
+    df_att["cat"] = df_att["cat"].replace([0], 9999)
     df_att["cat"] = df_att["cat"].astype(int)
 
     # write categories, and matrix (for checking)
     h_out = os.path.join(tim_subj_dir, f"3dSVM_{tim_dcn_str}_categories.txt")
     np.savetxt(h_out, df_att["cat"].values, fmt="%s", delimiter=" ")
-
     h_df = os.path.join(tim_subj_dir, f"3dSVM_{tim_dcn_str}_matrix.txt")
     np.savetxt(h_df, df_att.values, fmt="%s", delimiter=" ")
 
@@ -178,7 +179,6 @@ def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
     func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}all", dtr_subj_dir)
 
 
-# %%
 def main():
 
     # # For Testing
