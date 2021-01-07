@@ -15,6 +15,12 @@ from gp_step0_dcm2nii import func_sbatch
 
 def func_lenRun(lrn_subj_dir, lrn_phase):
 
+    """
+    Returns a dictionary that contains TR length,
+        number of volumes in the first run, number
+        of runs in phase, and the length (sec) of a run.
+    """
+
     # determine number of volumes
     h_cmd = f"module load afni-20.2.06 \n 3dinfo -ntimes {lrn_subj_dir}/run-1_{lrn_phase}_scale+tlrc"
     h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
@@ -53,6 +59,14 @@ def func_timing(
     tim_phase,
     tim_dcn_str,
 ):
+    """
+    Mines timing files (tf_phase_foo.txt) to construct
+        (a) category file, used for training, and
+        (b) matrix, used for verification.
+
+    Files have one row per volume of phase, and category ints
+        are 1-indexed from task_dict behaviors (0 = baseline)
+    """
 
     # convert timing files to 1D in volume time
     for beh in tim_beh_list:
@@ -115,15 +129,20 @@ def func_timing(
         df_att.loc[df_att["att"] == beh, "cat"] = int(cat)
     df_att["cat"] = df_att["cat"].astype(int)
 
-    # write
-    h_out = os.path.join(tim_subj_dir, f"{tim_dcn_str}_categories.txt")
+    # write categories, and matrix (for checking)
+    h_out = os.path.join(tim_subj_dir, f"3dSVM_{tim_dcn_str}_categories.txt")
     np.savetxt(h_out, df_att["cat"].values, fmt="%s", delimiter=" ")
 
-    h_df = os.path.join(tim_subj_dir, f"{tim_dcn_str}_cat_df.txt")
+    h_df = os.path.join(tim_subj_dir, f"3dSVM_{tim_dcn_str}_matrix.txt")
     np.savetxt(h_df, df_att.values, fmt="%s", delimiter=" ")
 
 
 def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
+
+    """
+    Extracts non-baseline sub-bricks from decon_cbucket_REML+tlrc to
+        generate 3dSVM_phase_foo+tlrc
+    """
 
     # get relevant column numbers
     #   read design matrix, find column labels,
@@ -166,7 +185,7 @@ def main():
     # work_dir = "/scratch/madlab/nate_vCAT/derivatives"
     # subj = "sub-005"
     # sess = "ses-S1"
-    # task_dict = {"loc": ["face", "scene", "num"], "Study": {"BE": ["Bfe", "Bse"]}}
+    # task_dict = {"loc": ["face", "scene"], "Study": {"BE": ["Bfe", "Bse"]}}
     # phase = "loc"
     # hdr_dict = func_lenRun(subj_dir, phase)
 
@@ -194,7 +213,9 @@ def main():
             dcn_str = f"{phase}_decon"
 
             # make cat files
-            if not os.path.exists(os.path.join(subj_dir, f"{dcn_str}_categories.txt")):
+            if not os.path.exists(
+                os.path.join(subj_dir, f"3dSVM_{dcn_str}_categories.txt")
+            ):
                 func_timing(
                     task_dict[phase],
                     hdr_dict,
@@ -217,7 +238,7 @@ def main():
                 dcn_str = f"{phase}_{decon}"
 
                 if not os.path.exists(
-                    os.path.join(subj_dir, f"{dcn_str}_categories.txt")
+                    os.path.join(subj_dir, f"3dSVM_{dcn_str}_categories.txt")
                 ):
                     func_timing(
                         task_dict[phase][decon],
