@@ -128,7 +128,7 @@ def func_timing(
         tim_beh_list.insert(0, "base")
     for cat, beh in enumerate(tim_beh_list):
         df_att.loc[df_att["att"] == beh, "cat"] = cat
-    # df_att["cat"] = df_att["cat"].replace([0], 9999)
+    df_att["cat"] = df_att["cat"].replace([0], 9999)
     df_att["cat"] = df_att["cat"].astype(int)
 
     # write categories, and matrix (for checking)
