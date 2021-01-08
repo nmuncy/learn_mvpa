@@ -4,6 +4,10 @@ Notes
 task_dict - training and test behaviors must be equal in size (e.g. 2 & 2)
     so, if "loc" is train data, and training on "face" and "scene",
     test phases (Study) must also have 2 behaviors.
+
+    key: [list] => decon_string: [tf_strA, tf_strB]
+
+TODO update to account for incorrect CE/P behaviors
 """
 
 # %%
@@ -21,7 +25,15 @@ from gp_step0_dcm2nii import func_sbatch
 sess = "ses-S1"
 deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
 code_dir = "/home/nmuncy/compute/learn_mvpa"
-task_dict = {"loc": ["face", "scene"], "Study": {"BE": ["Bfe", "Bse"]}}
+task_dict = {
+    "loc": ["face", "scene"],
+    "Study": {
+        "BE": ["Bfe", "Bse"],
+        "BP": ["Bfp", "Bsp"],
+        "CP": ["cfpc", "cspc"],
+        "FP": ["Ffpc", "Fspc"],
+    },
+}
 
 
 # %%

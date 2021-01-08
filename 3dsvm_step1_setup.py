@@ -181,6 +181,15 @@ def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
 
 def main():
 
+    """
+    Make category files and detrended EPI data.
+
+    Account for whether type(task_dict[phase]) == list (one decon per phase),
+        or type(task_dict[phase]) == dict (multiple decons per phase).
+
+    Output will be titled 3dSVM_foo
+    """
+
     # # For Testing
     # work_dir = "/scratch/madlab/nate_vCAT/derivatives"
     # subj = "sub-005"
