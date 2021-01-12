@@ -12,6 +12,12 @@ from gp_step0_dcm2nii import func_sbatch
 # %%
 def func_train(subj_list, sess_str, train_str, work_dir, group_dir, mask):
 
+    """
+    Combines all subject train files into single training set.
+        Also concats category text files.
+    Then it trains on voxels pertaining to the mask.
+    Output is written to grpAnalysis.
+    """
     # Combine all train epi and category files
     train_list = []
     txt_list = []
@@ -62,15 +68,6 @@ def main():
         x for x in os.listdir(main_work_dir) if fnmatch.fnmatch(x, "sub-*")
     ]
     main_subj_list.sort()
-
-    print(
-        main_subj_list,
-        main_sess_str,
-        main_train_str,
-        main_work_dir,
-        main_group_dir,
-        main_mask,
-    )
 
     func_train(
         main_subj_list,
