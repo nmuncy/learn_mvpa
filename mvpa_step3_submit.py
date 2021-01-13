@@ -24,7 +24,7 @@ def main():
     os.makedirs(out_dir)
 
     for subj in subj_list:
-        # subj = subj_list[0]
+        # subj = subj_list[1]
 
         # write json
         subj_dir = os.path.join(deriv_dir, subj, sess)
@@ -39,7 +39,7 @@ def main():
         sbatch_job = f"""
             sbatch \
             -J "SVM3{subj.split("-")[1]}" -t 3:00:00 --mem=1000 --ntasks-per-node=1 \
-            -p IB_44C_512G  -o {h_out} -e {h_err} \
+            -p IB_40C_512G -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step3_test.py \
                 {subj} {subj_dir} {group_dir}"
