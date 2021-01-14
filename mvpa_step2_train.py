@@ -22,9 +22,9 @@ def func_train(subj_list, sess_str, train_str, work_dir, group_dir, mask):
     train_list = []
     txt_list = []
     for subj in subj_list:
-        h_file = os.path.join(work_dir, subj, sess_str, f"3dSVM_{train_str}+tlrc")
+        h_file = os.path.join(work_dir, subj, sess_str, f"MVPA_{train_str}+tlrc")
         h_txt = os.path.join(
-            work_dir, subj, sess_str, f"3dSVM_{train_str}_categories.txt"
+            work_dir, subj, sess_str, f"MVPA_{train_str}_categories.txt"
         )
         if os.path.exists(f"{h_file}.HEAD"):
             train_list.append(h_file)
@@ -44,14 +44,14 @@ def func_train(subj_list, sess_str, train_str, work_dir, group_dir, mask):
                     outfile.write(line)
 
     # Train
-    if not os.path.exists(os.path.join(group_dir, "3dSVM_train+tlrc.HEAD")):
+    if not os.path.exists(os.path.join(group_dir, "MVPA_train+tlrc.HEAD")):
         h_cmd = f"""
             cd {group_dir}
             3dsvm -trainvol vCAT_train+tlrc \
                 -trainlabels vCAT_train_cat.txt \
                 -mask {mask} \
-                -model 3dSVM_train \
-                > 3dSVM_train_acc.txt 2>&1
+                -model MVPA_train \
+                > MVPA_train_acc.txt 2>&1
         """
         func_sbatch(h_cmd, 4, 6, 4, "MVPAtrn", group_dir)
 
