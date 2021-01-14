@@ -20,7 +20,7 @@ def main():
     # Work
     current_time = datetime.now()
     out_dir = os.path.join(
-        deriv_dir, f'Slurm_out/SVM3_{current_time.strftime("%H%M_%d-%m-%y")}'
+        deriv_dir, f'Slurm_out/MVPA3_{current_time.strftime("%H%M_%d-%m-%y")}'
     )
     os.makedirs(out_dir)
 
@@ -39,7 +39,7 @@ def main():
         # submit command
         sbatch_job = f"""
             sbatch \
-            -J "SVM3{subj.split("-")[1]}" -t 3:00:00 --mem=1000 --ntasks-per-node=1 \
+            -J "MVPA3{subj.split("-")[1]}" -t 3:00:00 --mem=1000 --ntasks-per-node=1 \
             -p IB_44C_512G -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step3_test.py \

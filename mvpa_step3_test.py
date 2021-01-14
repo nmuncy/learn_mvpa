@@ -23,35 +23,38 @@ def func_test(subj, test_list, subj_dir, group_dir):
     for test in test_list:
 
         # Get only test volumes
-        if not os.path.exists(os.path.join(subj_dir, f"3dSVM_{test}_test+tlrc.HEAD")):
+        if not os.path.exists(os.path.join(subj_dir, f"MVPA_{test}_test+tlrc.HEAD")):
+
+            # make new category file for only relevant volumes
+            #   will be used for ROC
             df = pd.read_csv(
-                os.path.join(subj_dir, f"3dSVM_{test}_categories.txt"),
+                os.path.join(subj_dir, f"MVPA_{test}_categories.txt"),
                 sep=" ",
                 header=None,
             )
             df.columns = ["cat"]
-
             df_new = df[df["cat"] != 9999]
-            df_out = os.path.join(subj_dir, f"3dSVM_{test}_cat_updated.txt")
+            df_out = os.path.join(subj_dir, f"MVPA_{test}_cat_updated.txt")
             np.savetxt(df_out, df_new["cat"].values, fmt="%s", delimiter=" ")
 
+            # make file of only relevant volumes
             df_list = df_new.index.values.tolist()
             h_cmd = f"""
-                    cd {subj_dir}
-                    3dTcat -prefix 3dSVM_{test}_test 3dSVM_{test}+tlrc[{",".join(str(i) for i in df_list)}]
-                """
+                cd {subj_dir}
+                3dTcat -prefix MVPA_{test}_test MVPA_{test}+tlrc[{",".join(str(i) for i in df_list)}]
+            """
             func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}cat", subj_dir)
 
         # Test
-        if not os.path.exists(os.path.join(subj_dir, f"3dSVM_pred_{test}.1D")):
+        if not os.path.exists(os.path.join(subj_dir, f"MVPA_pred_{test}.1D")):
             h_cmd = f"""
                 cd {subj_dir}
-                3dsvm -testvol 3dSVM_{test}_test+tlrc \
-                    -model {group_dir}/3dSVM_train+tlrc \
-                    -testlabels 3dSVM_{test}_cat_updated.txt \
-                    -predictions 3dSVM_pred_{test} \
+                3dsvm -testvol MVPA_{test}_test+tlrc \
+                    -model {group_dir}/MVPA_train+tlrc \
+                    -testlabels MVPA_{test}_cat_updated.txt \
+                    -predictions MVPA_pred_{test} \
                     -classout \
-                    2> 3dSVM_pred_{test}_acc.txt
+                    2> MVPA_pred_{test}_acc.txt
             """
             out_str = f"{subj_num}{test.split('_')[1]}"
             func_sbatch(h_cmd, 1, 8, 4, out_str, subj_dir)
