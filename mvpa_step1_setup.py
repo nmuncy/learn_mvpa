@@ -132,9 +132,9 @@ def func_timing(
     df_att["cat"] = df_att["cat"].astype(int)
 
     # write categories, and matrix (for checking)
-    h_out = os.path.join(tim_subj_dir, f"3dSVM_{tim_dcn_str}_categories.txt")
+    h_out = os.path.join(tim_subj_dir, f"MVPA_{tim_dcn_str}_categories.txt")
     np.savetxt(h_out, df_att["cat"].values, fmt="%s", delimiter=" ")
-    h_df = os.path.join(tim_subj_dir, f"3dSVM_{tim_dcn_str}_matrix.txt")
+    h_df = os.path.join(tim_subj_dir, f"MVPA_{tim_dcn_str}_matrix.txt")
     np.savetxt(h_df, df_att.values, fmt="%s", delimiter=" ")
 
 
@@ -142,7 +142,7 @@ def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
 
     """
     Extracts non-baseline sub-bricks from decon_cbucket_REML+tlrc to
-        generate 3dSVM_phase_foo+tlrc
+        generate MVPA_phase_foo+tlrc
     """
 
     # get relevant column numbers
@@ -172,7 +172,7 @@ def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
     h_cmd = f"""
         cd {dtr_subj_dir}
         3dTcat -prefix tmp_{dtr_dcn_str}_cbucket -tr {dtr_hdr_dict["LenTR"]} "{dtr_dcn_str}_cbucket_REML+tlrc[0..{len_right}]"
-        3dSynthesize -prefix 3dSVM_{dtr_dcn_str} -matrix X.{dtr_dcn_str}.xmat.1D \
+        3dSynthesize -prefix MVPA_{dtr_dcn_str} -matrix X.{dtr_dcn_str}.xmat.1D \
             -cbucket tmp_{dtr_dcn_str}_cbucket+tlrc -select {" ".join(brick_list)} -cenfill nbhr
     """
     subj_num = dtr_subj_dir.split("-")[1].split("/")[0]
@@ -187,7 +187,7 @@ def main():
     Account for whether type(task_dict[phase]) == list (one decon per phase),
         or type(task_dict[phase]) == dict (multiple decons per phase).
 
-    Output will be titled 3dSVM_foo
+    Output will be titled MVPA_foo
     """
 
     # # For Testing
@@ -223,7 +223,7 @@ def main():
 
             # make cat files
             if not os.path.exists(
-                os.path.join(subj_dir, f"3dSVM_{dcn_str}_categories.txt")
+                os.path.join(subj_dir, f"MVPA_{dcn_str}_categories.txt")
             ):
                 func_timing(
                     task_dict[phase],
@@ -234,7 +234,7 @@ def main():
                 )
 
             # make detrended data
-            if not os.path.exists(os.path.join(subj_dir, f"3dSVM_{dcn_str}+tlrc.HEAD")):
+            if not os.path.exists(os.path.join(subj_dir, f"MVPA_{dcn_str}+tlrc.HEAD")):
                 func_detrend(subj_dir, dcn_str, task_dict[phase], hdr_dict)
 
         elif type(task_dict[phase]) == dict:
@@ -247,7 +247,7 @@ def main():
                 dcn_str = f"{phase}_{decon}"
 
                 if not os.path.exists(
-                    os.path.join(subj_dir, f"3dSVM_{dcn_str}_categories.txt")
+                    os.path.join(subj_dir, f"MVPA_{dcn_str}_categories.txt")
                 ):
                     func_timing(
                         task_dict[phase][decon],
@@ -258,7 +258,7 @@ def main():
                     )
 
                 if not os.path.exists(
-                    os.path.join(subj_dir, f"3dSVM_{dcn_str}+tlrc.HEAD")
+                    os.path.join(subj_dir, f"MVPA_{dcn_str}+tlrc.HEAD")
                 ):
                     func_detrend(subj_dir, dcn_str, task_dict[phase][decon], hdr_dict)
 

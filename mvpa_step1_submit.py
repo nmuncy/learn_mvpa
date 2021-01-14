@@ -99,7 +99,7 @@ def main():
     """ Step 2: Submit Jobs"""
     current_time = datetime.now()
     out_dir = os.path.join(
-        deriv_dir, f'Slurm_out/SVM1_{current_time.strftime("%H%M_%d-%m-%y")}'
+        deriv_dir, f'Slurm_out/MVPA1_{current_time.strftime("%H%M_%d-%m-%y")}'
     )
     os.makedirs(out_dir)
 
@@ -118,7 +118,7 @@ def main():
         # submit command
         sbatch_job = f"""
             sbatch \
-            -J "SVM1{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
+            -J "MVPA1{subj.split("-")[1]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
             -p IB_44C_512G  -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step1_setup.py \
