@@ -110,14 +110,16 @@ def func_decon(
 def func_job(phase, decon_type, work_dir, sub_num, time_files):
 
     # # For testing
-    # subj = "sub-005"
+    # subj = "sub-018"
     # sess = "ses-S1"
     # phase = "Study"
     # decon_type = "TENT"
-    # sub_num = "005"
+    # sub_num = subj.split("-")[1]
     # par_dir = "/scratch/madlab/nate_vCAT"
     # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
-    # time_files = {}
+    # with open(os.path.join(work_dir, "decon_dict.json")) as json_file:
+    #     decon_dict = json.load(json_file)
+    # time_files = decon_dict[phase]
 
     """
     Step 1: Make motion regressors
@@ -195,11 +197,6 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
     ]
     mot_list.sort()
 
-    # # Get timing files - all are named tf_phase_beh.txt
-    # #   e.g. tf_vCAT_hit.txt
-    # tf_list = [x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"tf_{phase}*.txt")]
-    # tf_list.sort()
-
     if type(time_files) == list:
 
         desc = "decon"
@@ -238,6 +235,7 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
 
     elif type(time_files) == dict:
         for desc in time_files:
+            # desc = "BE"
 
             tf_dict = {}
             for i in time_files[desc]:

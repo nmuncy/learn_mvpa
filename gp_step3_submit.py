@@ -74,20 +74,24 @@ def main():
             with open(os.path.join(deriv_dir, i, j, "decon_dict.json"), "w") as outfile:
                 json.dump(decon_dict, outfile)
 
-            sbatch_job = f"""
-                sbatch \
-                -J "GP3{i.split("-")[1]}" -t 30:00:00 --mem=4000 --ntasks-per-node=1 \
-                -p IB_44C_512G  -o {h_out} -e {h_err} \
-                --account iacc_madlab --qos pq_madlab \
-                --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
-                python {code_dir}/gp_step3_decon.py {i} {j} {decon_type} {deriv_dir}"
-            """
-            sbatch_submit = subprocess.Popen(
-                sbatch_job, shell=True, stdout=subprocess.PIPE
-            )
-            job_id = sbatch_submit.communicate()[0]
-            print(job_id)
-            time.sleep(1)
+            check_phase = list(decon_dict.keys())[-1]
+            check_decon = list(decon_dict[list(decon_dict.keys())[-1]])[-1]
+            check_file = f"{check_phase}_{check_decon}_stats_REML+tlrc.HEAD"
+            if not os.path.exists(os.path.join(deriv_dir, i, j, check_file)):
+                sbatch_job = f"""
+                    sbatch \
+                    -J "GP3{i.split("-")[1]}" -t 30:00:00 --mem=4000 --ntasks-per-node=1 \
+                    -p IB_44C_512G  -o {h_out} -e {h_err} \
+                    --account iacc_madlab --qos pq_madlab \
+                    --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
+                    python {code_dir}/gp_step3_decon.py {i} {j} {decon_type} {deriv_dir}"
+                """
+                sbatch_submit = subprocess.Popen(
+                    sbatch_job, shell=True, stdout=subprocess.PIPE
+                )
+                job_id = sbatch_submit.communicate()[0]
+                print(job_id)
+                time.sleep(1)
 
 
 if __name__ == "__main__":
