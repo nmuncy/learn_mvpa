@@ -9,12 +9,13 @@ from datetime import datetime
 def main():
 
     sess = "ses-S1"
-    test_list = ["Study_BE", "Study_BP", "Study_CP", "Study_FP"]
+    test_list = ["Study_BE", "Study_CE", "Study_FP"]
 
     deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
     group_dir = os.path.join(deriv_dir, "grpAnalysis")
     code_dir = "/home/nmuncy/compute/learn_mvpa"
     subj_list = [x for x in os.listdir(deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
+    subj_list.sort()
 
     # Work
     current_time = datetime.now()
@@ -24,7 +25,7 @@ def main():
     os.makedirs(out_dir)
 
     for subj in subj_list:
-        # subj = subj_list[1]
+        # subj = subj_list[2]
 
         # write json
         subj_dir = os.path.join(deriv_dir, subj, sess)
@@ -39,7 +40,7 @@ def main():
         sbatch_job = f"""
             sbatch \
             -J "SVM3{subj.split("-")[1]}" -t 3:00:00 --mem=1000 --ntasks-per-node=1 \
-            -p IB_40C_512G -o {h_out} -e {h_err} \
+            -p IB_44C_512G -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step3_test.py \
                 {subj} {subj_dir} {group_dir}"

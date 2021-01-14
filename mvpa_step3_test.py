@@ -1,50 +1,9 @@
-"""
-Notes
-"""
-
-
 import os
 import numpy as np
 import pandas as pd
 import sys
 import json
-import subprocess
-import time
-
-# from gp_step0_dcm2nii import func_sbatch
-
-
-def func_sbatch(command, wall_hours, mem_gig, num_proc, h_str, work_dir):
-    #
-    full_name = f"{work_dir}/sbatch_writeOut_{h_str}"
-    sbatch_job = f"""
-        sbatch \
-        -J {h_str} -t {wall_hours}:00:00 --mem={mem_gig}000 --ntasks-per-node={num_proc} \
-        -p IB_40C_512G -o {full_name}.out -e {full_name}.err \
-        --account iacc_madlab --qos pq_madlab \
-        --wrap="module load afni-20.2.06 \n {command}"
-    """
-    sbatch_response = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
-    job_id = sbatch_response.communicate()[0]
-    print(job_id, h_str, sbatch_job)
-
-    while_count = 0
-    status = False
-    while not status:
-
-        check_cmd = "squeue -u $(whoami)"
-        sq_check = subprocess.Popen(check_cmd, shell=True, stdout=subprocess.PIPE)
-        out_lines = sq_check.communicate()[0]
-        b_decode = out_lines.decode("utf-8")
-
-        if h_str not in b_decode:
-            status = True
-
-        if not status:
-            while_count += 1
-            print(f"Wait count for sbatch job {h_str}: ", while_count)
-            time.sleep(3)
-    print(f'Sbatch job "{h_str}" finished')
+from gp_step0_dcm2nii import func_sbatch
 
 
 def func_test(subj, test_list, subj_dir, group_dir):
@@ -86,7 +45,6 @@ def func_test(subj, test_list, subj_dir, group_dir):
         # Test
         if not os.path.exists(os.path.join(subj_dir, f"3dSVM_pred_{test}.1D")):
             h_cmd = f"""
-                module load afni-20.2.06
                 cd {subj_dir}
                 3dsvm -testvol 3dSVM_{test}_test+tlrc \
                     -model {group_dir}/3dSVM_train+tlrc \
@@ -95,7 +53,8 @@ def func_test(subj, test_list, subj_dir, group_dir):
                     -classout \
                     2> 3dSVM_pred_{test}_acc.txt
             """
-            func_sbatch(h_cmd, 1, 4, 4, f"{subj_num}tst", subj_dir)
+            out_str = f"{subj_num}{test.split('_')[1]}"
+            func_sbatch(h_cmd, 1, 8, 4, out_str, subj_dir)
 
 
 def main():

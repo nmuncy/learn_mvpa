@@ -29,8 +29,7 @@ task_dict = {
     "loc": ["face", "scene"],
     "Study": {
         "BE": ["Bfe", "Bse"],
-        "BP": ["Bfp", "Bsp"],
-        "CP": ["cfpc", "cspc"],
+        "CE": ["cfec", "csec"],
         "FP": ["Ffpc", "Fspc"],
     },
 }
