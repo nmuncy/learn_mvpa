@@ -1,3 +1,10 @@
+"""
+Notes
+
+Updated to use individual subject training models.
+"""
+
+
 import os
 import numpy as np
 import pandas as pd
@@ -6,7 +13,7 @@ import json
 from gp_step0_dcm2nii import func_sbatch
 
 
-def func_test(subj, test_list, subj_dir, group_dir):
+def func_test(subj, test_list, subj_dir):
 
     """
     Generates a test file consisting of only relevant volumes.
@@ -50,7 +57,7 @@ def func_test(subj, test_list, subj_dir, group_dir):
             h_cmd = f"""
                 cd {subj_dir}
                 3dsvm -testvol MVPA_{test}_test+tlrc \
-                    -model {group_dir}/MVPA_train+tlrc \
+                    -model MVPA_train+tlrc \
                     -testlabels MVPA_{test}_cat_updated.txt \
                     -predictions MVPA_pred_{test} \
                     -classout \
@@ -63,11 +70,10 @@ def func_test(subj, test_list, subj_dir, group_dir):
 def main():
     main_subj = str(sys.argv[1])
     main_subj_dir = str(sys.argv[2])
-    main_group_dir = str(sys.argv[3])
     with open(os.path.join(main_subj_dir, "test_list.json")) as json_file:
         main_test_list = json.load(json_file)
 
-    func_test(main_subj, main_test_list, main_subj_dir, main_group_dir)
+    func_test(main_subj, main_test_list, main_subj_dir)
 
 
 if __name__ == "__main__":
