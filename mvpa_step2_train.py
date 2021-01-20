@@ -34,7 +34,7 @@ def func_train(subj_str, sess_str, work_dir, train_str):
                 -model MVPA_train \
                 > MVPA_train_acc.txt 2>&1
         """
-        func_sbatch(h_cmd, 1, 6, 2, f"{subj_str.split('-')[1]}trn", subj_dir)
+        func_sbatch(h_cmd, 2, 6, 4, f"{subj_str.split('-')[1]}trn", subj_dir)
 
 
 def main():
