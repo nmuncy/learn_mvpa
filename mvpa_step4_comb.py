@@ -29,28 +29,29 @@ def main():
         subj_dir = os.path.join(deriv_dir, subj, sess_str)
 
         for test in test_list:
+            if os.path.exists(os.path.join(subj_dir, f"MVPA_pred_{test}.1D")):
 
-            # Combine true, predicted categories
-            df_subj = pd.read_table(
-                os.path.join(subj_dir, f"MVPA_{test}_cat_updated.txt")
-            )
-            df_subj["Pred"] = pd.read_table(
-                os.path.join(subj_dir, f"MVPA_pred_{test}.1D")
-            )
-            df_subj.columns = ["True", "Pred"]
-
-            # Split into individual cat files, for ROC
-            for cat in cat_dict:
-                np.savetxt(
-                    os.path.join(beh_dir, f"{subj}_{test}_{cat}.txt"),
-                    df_subj[
-                        df_subj["True"].astype(str).str.contains(f"{cat_dict[cat]}")
-                    ],
-                    fmt="%s",
-                    delimiter=",",
-                    header="True,Pred",
-                    comments="",
+                # Combine true, predicted categories
+                df_subj = pd.read_table(
+                    os.path.join(subj_dir, f"MVPA_{test}_cat_updated.txt")
                 )
+                df_subj["Pred"] = pd.read_table(
+                    os.path.join(subj_dir, f"MVPA_pred_{test}.1D")
+                )
+                df_subj.columns = ["True", "Pred"]
+
+                # Split into individual cat files, for ROC
+                for cat in cat_dict:
+                    np.savetxt(
+                        os.path.join(beh_dir, f"{subj}_{test}_{cat}.txt"),
+                        df_subj[
+                            df_subj["True"].astype(str).str.contains(f"{cat_dict[cat]}")
+                        ],
+                        fmt="%s",
+                        delimiter=",",
+                        header="True,Pred",
+                        comments="",
+                    )
 
 
 if __name__ == "__main__":
