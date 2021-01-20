@@ -1,3 +1,10 @@
+"""
+Notes
+
+test_list = list of strings that identify individual files output
+    from mvpa_step1
+"""
+
 import os
 import time
 import json
@@ -12,7 +19,6 @@ def main():
     test_list = ["Study_BE", "Study_CE", "Study_FP"]
 
     deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
-    group_dir = os.path.join(deriv_dir, "grpAnalysis")
     code_dir = "/home/nmuncy/compute/learn_mvpa"
     subj_list = [x for x in os.listdir(deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
     subj_list.sort()
@@ -25,7 +31,6 @@ def main():
     os.makedirs(out_dir)
 
     for subj in subj_list:
-        # subj = subj_list[2]
 
         # write json
         subj_dir = os.path.join(deriv_dir, subj, sess)
@@ -43,7 +48,7 @@ def main():
             -p IB_44C_512G -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step3_test.py \
-                {subj} {subj_dir} {group_dir}"
+                {subj} {subj_dir}"
         """
         sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
         job_id = sbatch_submit.communicate()[0]
