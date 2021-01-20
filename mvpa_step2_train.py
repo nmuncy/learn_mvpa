@@ -1,82 +1,50 @@
 """
 Notes
+
+Updated to train (and then test) on subjects individually.
+Group training yielded:
+    error = 37.6%
+    recall = 25.9% (hit/(hit+miss))
+    precision = 92.5% (hit/fa)
+
+    Individual training yields better recall, and lower error.
+
+TODO update to multiple intersection mask x ROI mask
 """
 
 # %%
 import os
 import sys
-import fnmatch
 from gp_step0_dcm2nii import func_sbatch
 
 
 # %%
-def func_train(subj_list, sess_str, train_str, work_dir, group_dir, mask):
-
+def func_train(subj_str, sess_str, work_dir, train_str):
     """
-    Combines all subject train files into single training set.
-        Also concats category text files.
-    Then it trains on voxels pertaining to the mask.
-    Output is written to grpAnalysis.
+    Train on data, write model to MVPA_train+tlrc.
+    Capture training stats in MVPA_train_acc.txt
     """
-    # Combine all train epi and category files
-    train_list = []
-    txt_list = []
-    for subj in subj_list:
-        h_file = os.path.join(work_dir, subj, sess_str, f"MVPA_{train_str}+tlrc")
-        h_txt = os.path.join(
-            work_dir, subj, sess_str, f"MVPA_{train_str}_categories.txt"
-        )
-        if os.path.exists(f"{h_file}.HEAD"):
-            train_list.append(h_file)
-            txt_list.append(h_txt)
-
-    if not os.path.exists(os.path.join(group_dir, "vCAT_train+tlrc.HEAD")):
+    subj_dir = os.path.join(work_dir, subj_str, sess_str)
+    if not os.path.exists(os.path.join(subj_dir, "MVPA_train+tlrc.HEAD")):
         h_cmd = f"""
-            cd {group_dir}
-            3dTcat -prefix vCAT_train {" ".join(train_list)}
-        """
-        func_sbatch(h_cmd, 1, 1, 1, "MVPAcomb", group_dir)
-
-    with open(os.path.join(group_dir, "vCAT_train_cat.txt"), "w") as outfile:
-        for fname in txt_list:
-            with open(fname) as infile:
-                for line in infile:
-                    outfile.write(line)
-
-    # Train
-    if not os.path.exists(os.path.join(group_dir, "MVPA_train+tlrc.HEAD")):
-        h_cmd = f"""
-            cd {group_dir}
-            3dsvm -trainvol vCAT_train+tlrc \
-                -trainlabels vCAT_train_cat.txt \
-                -mask {mask} \
+            cd {subj_dir}
+            3dsvm -trainvol MVPA_{train_str}+tlrc \
+                -trainlabels MVPA_{train_str}_categories.txt \
+                -mask mask_epi_anat+tlrc \
                 -model MVPA_train \
                 > MVPA_train_acc.txt 2>&1
         """
-        func_sbatch(h_cmd, 4, 6, 4, "MVPAtrn", group_dir)
+        func_sbatch(h_cmd, 1, 6, 2, f"{subj_str.split('-')[1]}trn", subj_dir)
 
 
 def main():
 
-    main_sess_str = str(sys.argv[1])
-    main_train_str = str(sys.argv[2])
-    main_work_dir = str(sys.argv[3])
-    main_group_dir = str(sys.argv[4])
-    main_mask = str(sys.argv[5])
+    main_subj_str = str(sys.argv[1])
+    main_sess_str = str(sys.argv[2])
+    main_train_str = str(sys.argv[3])
+    main_work_dir = str(sys.argv[4])
 
-    main_subj_list = [
-        x for x in os.listdir(main_work_dir) if fnmatch.fnmatch(x, "sub-*")
-    ]
-    main_subj_list.sort()
-
-    func_train(
-        main_subj_list,
-        main_sess_str,
-        main_train_str,
-        main_work_dir,
-        main_group_dir,
-        main_mask,
-    )
+    func_train(main_subj_str, main_sess_str, main_work_dir, main_train_str)
 
 
 if __name__ == "__main__":
