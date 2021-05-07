@@ -162,9 +162,17 @@ for phase in phase_list:
             """
             func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}out", work_dir)
 
-    # new fmap correct
-    #   -f = same direction as epi run, will
-    #   become "Forward"
+# %%
+# new fmap correct
+#   -f = same direction as epi run, will
+#   become "Forward"
+epiAll_list = [
+    x.split("+")[0]
+    for x in os.listdir(os.path.join(work_dir))
+    if fnmatch.fnmatch(x, "run-*HEAD")
+]
+
+if not os.path.exists(os.path.join(work_dir, "blip_WARP+orig.HEAD")):
     h_cmd = f"""
         module load afni-20.2.06
         cd {work_dir}
@@ -172,48 +180,36 @@ for phase in phase_list:
         unWarpEPI.py \
             -f blip_PA+orig \
             -r blip_AP+orig \
-            -d '{",".join(epi_list)}' \
+            -d '{",".join(epiAll_list)}' \
             -a struct+orig \
-            -s fmap_{phase}
+            -s fmap
+
+        3dcopy \
+            unWarpOutput_fmap/03_fmap_MidWarped_Forward_WARP.nii.gz \
+            blip_WARP
     """
     print(h_cmd)
     h_fmap = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     h_fmap.wait()
 
-# if blip_tog == 1:
-#     h_run = run.split("_")[0]
-#     for j in ["Forward", "Reverse"]:
-
-#         # create median datasets and masks
-#         if not os.path.exists(
-#             os.path.join(work_dir, f"tmp_blip_med_masked_{h_run}_{j}+orig.HEAD")
-#         ):
-#             h_cmd = f"""
-#                 cd {work_dir}
-#                 3dTstat -median -prefix tmp_blip_med_{h_run}_{j} blip_{h_run}_{j}+orig
-#                 3dAutomask -apply_prefix tmp_blip_med_masked_{h_run}_{j} \
-#                     tmp_blip_med_{h_run}_{j}+orig
-#             """
-#             func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}med", work_dir)
-
-#     # comput midpoint warp, unwarp run data (solve for fall out), apply header
-#     if not os.path.exists(os.path.join(work_dir, f"{run}_blip+orig.HEAD")):
-#         h_cmd = f"""
-#             cd {work_dir}
-
-#             3dQwarp -plusminus -pmNAMES Rev For \
-#                 -pblur 0.05 0.05 -blur -1 -1 \
-#                 -noweight -minpatch 9 \
-#                 -source tmp_blip_med_masked_{h_run}_Reverse+orig \
-#                 -base tmp_blip_med_masked_{h_run}_Forward+orig \
-#                 -prefix blip_{h_run}
-
-#             3dNwarpApply -quintic -nwarp blip_{h_run}_For_WARP+orig \
-#                 -source {run}+orig -prefix {run}_blip
-
-#             3drefit -atrcopy blip_{h_run}_Forward+orig IJK_TO_DICOM_REAL {run}_blip+orig
-#         """
-#         func_sbatch(h_cmd, 1, 2, 4, f"{subj_num}qwa", work_dir)
+# %%
+# copy fmap corrected files to work_dir
+fmapCorr_list = [
+    x
+    for x in os.listdir(os.path.join(work_dir, "unWarpOutput_fmap"))
+    if fnmatch.fnmatch(x, "06*.nii.gz")
+]
+for fmap_file in fmapCorr_list:
+    h_run = fmap_file.split("_")[2]
+    h_phase = fmap_file.split("_")[3]
+    out_file = os.path.join(work_dir, f"{h_run}_{h_phase}_blip")
+    if not os.path.exists(f"{out_file}+orig.HEAD"):
+        h_cmd = f"""
+            3dcopy \
+                {work_dir}/unWarpOutput_fmap/{fmap_file} \
+                {out_file}
+        """
+        func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}Cfmap", work_dir)
 
 
 # %%
