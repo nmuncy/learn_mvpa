@@ -472,11 +472,11 @@ for phase in phase_list:
 
             3dMean \
                 -datum short \
-                -prefix tmp_mean \
+                -prefix tmp_mean_{phase} \
                 tmp_run-{{1..{len(epi_list)}}}_{phase}_min+tlrc
 
             3dcalc \
-                -a tmp_mean+tlrc \
+                -a tmp_mean_{phase}+tlrc \
                 -expr 'step(a-0.999)' \
                 -prefix {phase}_minVal_mask
         """
@@ -513,47 +513,43 @@ Step 5: Blur, Make masks
 """
 
 # Blur
-for phase in phase_list:
-    epi_list = func_epi_list(phase, work_dir)
-    for run in epi_list:
-        if not os.path.exists(os.path.join(work_dir, f"{run}_blur+tlrc.HEAD")):
-
-            # calc voxel dim i
-            h_cmd = (
-                f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -di {run}+orig"
-            )
-            h_gs = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-            h_gs_out = h_gs.communicate()[0]
-            grid_size = h_gs_out.decode("utf-8").strip()
-            blur_size = math.ceil(1.5 * float(grid_size))
-
-            # do blur
-            h_cmd = f"""
-                cd {work_dir}
-                3dmerge \
-                    -1blur_fwhm {blur_size} \
-                    -doall \
-                    -prefix {run}_blur \
-                    {run}_volreg_clean+tlrc
-            """
-            func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}blur", work_dir)
-
-# Make EPI-T1 union mask (mask_epi_anat)
-run_list = [
-    x.split(".")[0]
+epi_list = [
+    x.split("_vol")[0]
     for x in os.listdir(work_dir)
-    if fnmatch.fnmatch(x, "*blur+tlrc.HEAD")
+    if fnmatch.fnmatch(x, "*volreg_clean+tlrc.HEAD")
 ]
 
+for run in epi_list:
+    if not os.path.exists(os.path.join(work_dir, f"{run}_blur+tlrc.HEAD")):
+
+        # calc voxel dim i
+        h_cmd = f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -di {run}+orig"
+        h_gs = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+        h_gs_out = h_gs.communicate()[0]
+        grid_size = h_gs_out.decode("utf-8").strip()
+        blur_size = math.ceil(1.5 * float(grid_size))
+
+        # do blur
+        h_cmd = f"""
+            cd {work_dir}
+            3dmerge \
+                -1blur_fwhm {blur_size} \
+                -doall \
+                -prefix {run}_blur \
+                {run}_volreg_clean+tlrc
+        """
+        func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}blur", work_dir)
+
+
+# %%
+# Make EPI-T1 union mask (mask_epi_anat)
 if not os.path.exists(os.path.join(work_dir, "mask_epi_anat+tlrc.HEAD")):
 
-    for run in run_list:
-        # h_mout = os.path.join(work_dir, f"tmp_mask.{run}")
-        # h_min = os.path.join(work_dir, run)
-        if not os.path.exists(os.path.join(work_dir, f"tmp_mask.{run}.HEAD")):
+    for run in epi_list:
+        if not os.path.exists(os.path.join(work_dir, f"tmp_mask.{run}_blur+tlrc.HEAD")):
             h_cmd = f"""
                 cd {work_dir}
-                3dAutomask -prefix tmp_mask.{run} {run}
+                3dAutomask -prefix tmp_mask.{run} {run}_blur+tlrc
             """
             func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}mau", work_dir)
 
@@ -587,11 +583,12 @@ if not os.path.exists(os.path.join(work_dir, "mask_epi_anat+tlrc.HEAD")):
     """
     func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}uni", work_dir)
 
+# %%
 # Make tissue-class masks
 #   I like Atropos better than AFNI's way, so use those priors
 atropos_dict = {1: "CSF", 2: "GMc", 3: "WM", 4: "GMs"}
 atropos_dir = os.path.join(atlas_dir, "priors_ACT")
-h_tcin = os.path.join(work_dir, run_list[0])
+h_ref = f"{epi_list[0]}_blur+tlrc"
 
 for key in atropos_dict:
     h_tiss = atropos_dict[key]
@@ -608,7 +605,7 @@ for key in atropos_dict:
                 -o tmp_{h_tiss}_bin.nii.gz
 
             3dresample \
-                -master {h_tcin} \
+                -master {h_ref} \
                 -rmode NN \
                 -input tmp_{h_tiss}_bin.nii.gz \
                 -prefix final_mask_{h_tiss}+tlrc
@@ -619,7 +616,7 @@ for key in atropos_dict:
                 -prefix tmp_mask_{h_tiss}_eroded
 
             3dresample \
-                -master {h_tcin} \
+                -master {h_ref} \
                 -rmode NN \
                 -input tmp_mask_{h_tiss}_eroded+orig \
                 -prefix final_mask_{h_tiss}_eroded
