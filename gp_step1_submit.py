@@ -9,7 +9,7 @@ phase_list = list of phases gathered within a single session.
     For example, if a study and then a test phase were both scanned
     during the same session, then phase_list = ["study", "test"]
 """
-
+# %%
 import os
 from datetime import datetime
 import subprocess
@@ -19,10 +19,10 @@ import fnmatch
 # set up
 code_dir = "/home/nmuncy/compute/learn_mvpa"
 parent_dir = "/scratch/madlab/nate_vCAT"
-sess_list = ["ses-S1"]
-phase_list = ["loc", "Study"]
+sess_dict = {"ses-S1": ["loc", "Study"]}
 
 
+# %%
 def main():
 
     # set up stdout/err capture
@@ -43,14 +43,14 @@ def main():
     subj_list.sort()
 
     for subj in subj_list:
-        for sess in sess_list:
+        for sess in sess_dict:
             if not os.path.exists(
                 os.path.join(
                     parent_dir,
                     "derivatives",
                     subj,
                     sess,
-                    f"run-1_{phase_list[0]}_scale+tlrc.HEAD",
+                    f"run-1_{sess_dict[sess][0]}_scale+tlrc.HEAD",
                 )
             ):
 
@@ -64,7 +64,7 @@ def main():
                         --account iacc_madlab --qos pq_madlab \
                         --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
                         python {code_dir}/gp_step1_preproc.py {subj} {sess} \
-                        {parent_dir} {' '.join(phase_list)}"
+                        {parent_dir} {' '.join(sess_dict[sess])}"
                 """
                 sbatch_submit = subprocess.Popen(
                     sbatch_job, shell=True, stdout=subprocess.PIPE
