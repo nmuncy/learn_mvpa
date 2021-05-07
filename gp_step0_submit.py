@@ -31,8 +31,8 @@ def main():
 
     # set up work_dir
     dir_list = ["dset", "sourcedata", "derivatives", out_dir]
-    for i in dir_list:
-        h_dir = os.path.join(work_dir, i)
+    for new_dir in dir_list:
+        h_dir = os.path.join(work_dir, new_dir)
         if not os.path.exists(h_dir):
             os.makedirs(h_dir)
 
@@ -45,29 +45,31 @@ def main():
         json.dump(scan_dict, outfile)
 
     # submit jobs
-    for i in tar_list:
-        # i = tar_list[1]
+    for tar_file in tar_list:
 
-        tar_file = i.split("/")[-1]
-        tar_str = tar_file.split(".")[0]
+        tar_str = tar_file.split("/")[-1].split(".")[0]
         h_out = os.path.join(slurm_dir, f"out_{tar_str}.txt")
         h_err = os.path.join(slurm_dir, f"err_{tar_str}.txt")
 
-        # -p centos7_IB_44C_512G
         sbatch_job = f"""
             sbatch \
-            -J "GP0{i.split("-")[3]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
+            -J "GP0{tar_file.split("-")[3]}" -t 2:00:00 --mem=1000 --ntasks-per-node=1 \
             -p IB_44C_512G -o {h_out} -e {h_err} \
             --account iacc_madlab --qos pq_madlab \
             --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
             python {code_dir}/gp_step0_dcm2nii.py {tar_file} {tar_dir} {work_dir} {slurm_dir}"
         """
-
-        sbatch_submit = subprocess.Popen(sbatch_job, shell=True, stdout=subprocess.PIPE)
-        job_id = sbatch_submit.communicate()[0]
-        print(job_id)
-
-        time.sleep(1)
+        subj = f"sub-{tar_file.split('-')[3]}"
+        t1_file = os.path.join(
+            work_dir, f"dset/{subj}/ses-S1/anat/{subj}_ses-S1_T1w.nii.gz"
+        )
+        if not os.path.exists(t1_file):
+            sbatch_submit = subprocess.Popen(
+                sbatch_job, shell=True, stdout=subprocess.PIPE
+            )
+            job_id = sbatch_submit.communicate()[0]
+            print(job_id.decode("utf-8"))
+            time.sleep(1)
 
 
 if __name__ == "__main__":

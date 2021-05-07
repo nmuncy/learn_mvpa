@@ -48,11 +48,11 @@ def func_sbatch(command, wall_hours, mem_gig, num_proc, h_str, work_dir):
 
         if h_str not in b_decode:
             status = True
-
-        if not status:
+        else:
             while_count += 1
             print(f"Wait count for sbatch job {h_str}: ", while_count)
             time.sleep(3)
+
     print(f'Sbatch job "{h_str}" finished')
 
 
@@ -65,11 +65,11 @@ def func_dcm2nii(
 
         # Determine BIDS out string
         if scan_type == "func":
-            run = tmp_scan.split("_")[-1]
-            out_str = f"{subj}_{sess}_task-{scan_name}_run-{run}_bold"
+            h_run = tmp_scan.split("_")[-1]
+            out_str = f"{subj}_{sess}_task-{scan_name}_run-{h_run}_bold"
         elif scan_type == "fmap":
-            blip = tmp_scan.split("_")[-1]
-            out_str = f"{subj}_{sess}_acq-func_dir-{blip}_epi"
+            h_blip = tmp_scan.split("_")[-1]
+            out_str = f"{subj}_{sess}_acq-func_dir-{h_blip}_epi"
         elif scan_type == "anat":
             out_str = f"{subj}_{sess}_T1w"
 
@@ -95,54 +95,55 @@ def func_job(dcm_tar, data_dir, work_dir, source_dir, scan_dict, slurm_dir):
     # slurm_dir = "/home/nmuncy/compute/afni_python"
 
     # get paths, make output dirs
-    sess = "ses-" + dcm_tar.split("-")[4].split(".")[0]
-    subj_num = dcm_tar.split("-")[3]
-    subj = f"sub-{subj_num}"
+    sess = f"ses-{dcm_tar.split('-')[4].split('.')[0]}"
+    subj = f"sub-{dcm_tar.split('-')[3]}"
 
     subj_dir = os.path.join(work_dir, subj, sess)
     dcm_dir = os.path.join(source_dir, subj, sess)
 
-    for i in [subj_dir, dcm_dir]:
-        if not os.path.exists(i):
-            os.makedirs(i)
+    for new_dir in [subj_dir, dcm_dir]:
+        if not os.path.exists(new_dir):
+            os.makedirs(new_dir)
 
     # unzip tarball
     tar_ball = os.path.join(data_dir, dcm_tar)
     tar_out = dcm_tar.split(".")[0]
     if not os.path.exists(os.path.join(dcm_dir, tar_out)):
         h_cmd = f"tar -C {dcm_dir} -xzf {tar_ball}"
-        func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}tar", slurm_dir)
+        func_sbatch(h_cmd, 1, 1, 1, f"{subj.split('-')[1]}tar", slurm_dir)
 
     # %%
     # make scans found in scan_dict
     scan_dir = os.path.join(dcm_dir, tar_out, "scans")
-    for i in scan_dict:
+    for scan in scan_dict:
 
         # make output dir
-        out_dir = os.path.join(subj_dir, i)
+        out_dir = os.path.join(subj_dir, scan)
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
 
         # submit dcm2nii job
-        if isinstance(scan_dict[i], list):
-            for j in scan_dict[i]:
+        if isinstance(scan_dict[scan], list):
+            for run in scan_dict[scan]:
                 h_list = [
                     x
                     for x in os.listdir(os.path.join(dcm_dir, tar_out, "scans"))
-                    if j in x
+                    if run in x
                     and "setter" not in x
                     and "dMRI" not in x
                     and "32" not in x
                 ]
-                func_dcm2nii(h_list, j, i, out_dir, scan_dir, subj, sess, slurm_dir)
+                func_dcm2nii(
+                    h_list, run, scan, out_dir, scan_dir, subj, sess, slurm_dir
+                )
         else:
             h_list = [
                 x
                 for x in os.listdir(os.path.join(dcm_dir, tar_out, "scans"))
-                if scan_dict[i] in x and "setter" not in x and "dMRI" not in x
+                if scan_dict[scan] in x and "setter" not in x and "dMRI" not in x
             ]
             func_dcm2nii(
-                h_list, scan_dict[i], i, out_dir, scan_dir, subj, sess, slurm_dir
+                h_list, scan_dict[scan], scan, out_dir, scan_dir, subj, sess, slurm_dir
             )
 
     # %%
@@ -151,15 +152,15 @@ def func_job(dcm_tar, data_dir, work_dir, source_dir, scan_dict, slurm_dir):
 
         # write append list
         h_append = []
-        for i in scan_dict["func"]:
-            h_run_list = [
+        for scan in scan_dict["func"]:
+            run_list = [
                 x
                 for x in os.listdir(os.path.join(subj_dir, "func"))
-                if fnmatch.fnmatch(x, f"{subj}_*_task-{i}_*.nii.gz")
+                if fnmatch.fnmatch(x, f"{subj}_*_task-{scan}_*.nii.gz")
             ]
-            h_run_list.sort()
-            for j in h_run_list:
-                h_append.append(f"{sess}/func/{j}")
+            run_list.sort()
+            for run in run_list:
+                h_append.append(f"{sess}/func/{run}")
         json_append = {"IntendedFor": h_append}
 
         # append all json files
