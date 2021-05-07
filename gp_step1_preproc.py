@@ -33,6 +33,17 @@ def func_epi_list(phase, h_dir):
     return h_list
 
 
+def flatten_list(list_2d):
+    flat_list = []
+    for element in list_2d:
+        if type(element) is list:
+            for item in element:
+                flat_list.append(item)
+        else:
+            flat_list.append(element)
+    return flat_list
+
+
 # receive arguments
 def func_argparser():
     parser = ArgumentParser("Receive Bash args from wrapper")
@@ -74,11 +85,13 @@ subj_num = subj.split("-")[1]
 # struct
 if not os.path.exists(os.path.join(work_dir, "struct+orig.HEAD")):
     h_cmd = f"""
+        module load afni-20.2.06
         3dcopy \
             {data_dir}/anat/{subj}_{sess}_T1w.nii.gz \
             {work_dir}/struct+orig
     """
-    func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}t1w", work_dir)
+    h_copy = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+    h_copy.wait()
 
 # epi - keep runs sorted by phase
 for phase in phase_list:
@@ -94,11 +107,13 @@ for phase in phase_list:
         run_count = 1 + h_count
         if not os.path.exists(f"{work_dir}/run-{run_count}_{phase}+orig.HEAD"):
             h_cmd = f"""
+                module load afni-20.2.06
                 3dcopy \
                     {data_dir}/func/{h_file} \
                     {work_dir}/run-{run_count}_{phase}+orig
             """
-            func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}epi", work_dir)
+            h_copy = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+            h_copy.wait()
 
 # %%
 # fmap
@@ -112,11 +127,13 @@ for fmap in fmap_list:
     h_dir = fmap.split("-")[-1].split("_")[0]
     if not os.path.exists(f"{work_dir}/blip_{h_dir}+orig.HEAD"):
         h_cmd = f"""
+            module load afni-20.2.06
             3dcopy \
                 {data_dir}/fmap/{fmap} \
                 {work_dir}/blip_{h_dir}
         """
-        func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}fmap", work_dir)
+        h_copy = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+        h_copy.wait()
 
 
 # %%
@@ -163,15 +180,18 @@ for phase in phase_list:
             func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}out", work_dir)
 
 # %%
-# new fmap correct
-#   -f = same direction as epi run, will
-#   become "Forward"
+# Get all epi to be corrected w/same fmap
 epiAll_list = [
     x.split("+")[0]
     for x in os.listdir(os.path.join(work_dir))
     if fnmatch.fnmatch(x, "run-*HEAD")
 ]
 
+# new fmap correct
+#   -f = same direction as epi run, will
+#       become "Forward".
+#   Runs several 10s of minutes, crashes
+#       when subitted through func_sbatch.
 if not os.path.exists(os.path.join(work_dir, "blip_WARP+orig.HEAD")):
     h_cmd = f"""
         module load afni-20.2.06
@@ -194,22 +214,27 @@ if not os.path.exists(os.path.join(work_dir, "blip_WARP+orig.HEAD")):
 
 # %%
 # copy fmap corrected files to work_dir
+#   from unWarpOutput_foo
+# 06* is corrected file
 fmapCorr_list = [
     x
     for x in os.listdir(os.path.join(work_dir, "unWarpOutput_fmap"))
     if fnmatch.fnmatch(x, "06*.nii.gz")
 ]
+
 for fmap_file in fmapCorr_list:
     h_run = fmap_file.split("_")[2]
     h_phase = fmap_file.split("_")[3]
     out_file = os.path.join(work_dir, f"{h_run}_{h_phase}_blip")
     if not os.path.exists(f"{out_file}+orig.HEAD"):
         h_cmd = f"""
+            module load afni-20.2.06
             3dcopy \
                 {work_dir}/unWarpOutput_fmap/{fmap_file} \
                 {out_file}
         """
-        func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}Cfmap", work_dir)
+        h_copy = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+        h_copy.wait()
 
 
 # %%
@@ -224,57 +249,82 @@ Note: If data is not time shifted, do so before determining volreg_base.
     afni commands.
 """
 
-out_list = [
-    os.path.join(work_dir, x)
-    for x in os.listdir(work_dir)
-    if fnmatch.fnmatch(x, "outcount.*.1D")
-]
-out_list.sort()
+# combine all outcount.* into one master file (outcount_all.1D)
+#      1D to rule them all, and in the darkness bind them
+#
+# make sure things are in order
+out_dict = {}
+for phase in phase_list:
+    h_list = [
+        os.path.join(work_dir, x)
+        for x in os.listdir(work_dir)
+        if fnmatch.fnmatch(x, f"outcount.*{phase}.1D")
+    ]
+    h_list.sort()
+    out_dict[phase] = h_list
+out_list = flatten_list(list(out_dict.values()))
+
 out_all = os.path.join(work_dir, "outcount_all.1D")
 with open(out_all, "w") as outfile:
-    for i in out_list:
-        with open(i) as infile:
+    for out_file in out_list:
+        with open(out_file) as infile:
             outfile.write(infile.read())
 
-if not os.path.exists(os.path.join(work_dir, "epi_vrBase+orig.HEAD")):
-    vr_script = os.path.join(work_dir, "do_volregBase.sh")
-    if blip_tog == 1:
-        run_str = "blip+orig"
-    else:
-        run_str = "+orig"
-    with open(vr_script, "w") as script:
-        script.write(
-            """
-            #!/bin/bash
-            cd {}
-            unset tr_counts block
-            numRuns=0; for i in run-*_{}.HEAD; do
-                hold=`3dinfo -ntimes ${{i%.*}}`
-                tr_counts+="$hold "
-                block[$numRuns]=${{i%+*}}
-                let numRuns=$[$numRuns+1]
-            done
+# %%
+# all epi runs in experiment
+scan_dict = {}
+for phase in phase_list:
+    h_list = [
+        x.split(".")[0]
+        for x in os.listdir(work_dir)
+        if fnmatch.fnmatch(x, f"run-*{phase}_blip+orig.HEAD")
+    ]
+    h_list.sort()
+    scan_dict[phase] = h_list
+scan_list = flatten_list(list(scan_dict.values()))
 
-            minindex=`3dTstat -argmin -prefix - outcount_all.1D\\'`
-            ovals=(`1d_tool.py -set_run_lengths $tr_counts -index_to_run_tr $minindex`)
-            minoutrun=${{ovals[0]}}
-            minouttr=${{ovals[1]}}
+# list of volume nums
+num_vols = []
+for scan in scan_list:
+    h_cmd = f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -ntimes {scan}"
+    h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+    h_nvol_out = h_nvol.communicate()[0]
+    num_tr = h_nvol_out.decode("utf-8").strip()
+    num_vols.append(num_tr)
 
-            c=0; for ((d=1; d <= $numRuns; d++)); do
-                if [ 0$d == $minoutrun ]; then
-                    baseRun=${{block[$c]}}
-                fi
-                let c=$[$c+1]
-            done
+# determine index of min
+h_cmd = f"""
+    module load afni-20.2.06
+    3dTstat -argmin -prefix - {work_dir}/outcount_all.1D\\'
+"""
+h_mind = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+h_ind = h_mind.communicate()[0]
+ind_min = h_ind.decode("utf-8").strip()
 
-            3dbucket -prefix epi_vrBase ${{baseRun}}+orig"[${{minouttr}}]"
-            """.format(
-                work_dir, run_str
-            )
-        )
+# determine min volume
+h_cmd = f"""
+    module load afni-20.2.06
+    1d_tool.py \
+        -set_run_lengths {" ".join(num_vols)} \
+        -index_to_run_tr {ind_min}
+"""
+h_minV = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+h_min = h_minV.communicate()[0]
+min_runVol = h_min.decode("utf-8").strip().split()
 
-    h_cmd = f"source {vr_script}"
-    func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}vrb", work_dir)
+# determine run, volume
+min_run = scan_list[int(min_runVol[0])]
+min_vol = int(min_runVol[1])
+
+# make epi volreg base
+h_cmd = f"""
+    module load afni-20.2.06
+    cd {work_dir}
+    3dbucket -prefix epi_vrBase {min_run}"[{min_vol}]"
+"""
+h_vrb = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+h_vrb.wait()
+
 
 # %%
 """
