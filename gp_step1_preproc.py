@@ -56,7 +56,7 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
     """
 
     # # For testing
-    # subj = "sub-005"
+    # subj = "sub-008"
     # sess = "ses-S1"
     # phase_list = ["loc", "Study"]
 
@@ -282,6 +282,7 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
                 f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -ntimes {scan}"
             )
             h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+            h_nvol.wait()
             h_nvol_out = h_nvol.communicate()[0]
             num_tr = h_nvol_out.decode("utf-8").strip()
             num_vols.append(num_tr)
@@ -292,6 +293,7 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
             3dTstat -argmin -prefix - {work_dir}/outcount_all.1D\\'
         """
         h_mind = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+        h_mind.wait()
         h_ind = h_mind.communicate()[0]
         ind_min = h_ind.decode("utf-8").strip()
 
@@ -303,11 +305,13 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
                 -index_to_run_tr {ind_min}
         """
         h_minV = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+        h_minV.wait()
         h_min = h_minV.communicate()[0]
         min_runVol = h_min.decode("utf-8").strip().split()
 
         # determine run, volume
-        min_run = scan_list[int(min_runVol[0])]
+        #   account for 0 vs 1 indexing
+        min_run = scan_list[int(min_runVol[0]) - 1]
         min_vol = int(min_runVol[1])
 
         # make epi volreg base
