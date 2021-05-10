@@ -10,9 +10,9 @@ phase <- args[10]
 
 
 # # For testing
-# subjStr <- "vCAT_005"
+# subjStr <- "vCAT_008"
 # dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
-# outDir <- paste0("/Users/nmuncy/Projects/afni_python/",subjStr,"/ses-S1")
+# outDir <- "~/Desktop/"
 # numRuns <- 4
 # phase <- "task"
 # run <- 1
@@ -82,12 +82,18 @@ for(run in 1:numRuns){
           val_input <- c(val_input, val_dur)
         }
       }
+      
+      # update -- get most common time rather
+      #   than making table of durations since all are
+      #   appx equal
+      h_dur <- sort(table(val_input), decreasing=T)[1]
+      dur_input <- names(h_dur)
 
       # write
       out_file <- paste0(outDir, "/tf_loc_", stim,".txt")
       cat(row_input, "\n", file = out_file, append = h_ap, sep = "\t")
       out_dur <- paste0(outDir, "/dur_loc_", stim,".txt")
-      cat(val_input, "\n", file = out_dur, append = h_ap, sep = "\t")
+      cat(dur_input, "\n", file = out_dur, append = h_ap, sep = "\t")
     }
   }
 
@@ -300,6 +306,13 @@ for(run in 1:numRuns){
               if(length(hold_out) == 0){
                 hold_out <- "*"
                 hold_dur <- "*"
+              }else{
+                
+                # update -- get most common time rather
+                #   than making table of durations since all are
+                #   appx equal
+                h_dur <- sort(table(hold_dur), decreasing=T)[1]
+                hold_dur <- names(h_dur)
               }
               
               # set out file, write
@@ -317,7 +330,13 @@ for(run in 1:numRuns){
                 if(length(hold_out) == 0){
                   hold_out <- "*"
                   hold_dur <- "*"
+                }else{
+                  h_dur <- sort(table(hold_dur), decreasing=T)[1]
+                  hold_dur <- names(h_dur)
                 }
+                
+                h_dur <- sort(table(hold_dur), decreasing=T)[1]
+                hold_dur <- names(h_dur)
                 
                 out_file <- paste0(outDir, "/tf_Study_F", substr(i,1,1), substr(j,1,1), substr(k,1,1),".txt")
                 cat(hold_out, "\n", file = out_file, append = h_ap, sep = "\t")
@@ -334,6 +353,9 @@ for(run in 1:numRuns){
             if(length(hold_out) == 0){
               hold_out <- "*"
               hold_dur <- "*"
+            }else{
+              h_dur <- sort(table(hold_dur), decreasing=T)[1]
+              hold_dur <- names(h_dur)
             }
             
             out_file <- paste0(outDir, "/tf_Study_", substr(type,1,1), substr(i,1,1), substr(j,1,1), ".txt")
@@ -343,7 +365,6 @@ for(run in 1:numRuns){
           }
         }
       }
-        
     } # close type loop
   } # close task cond
 } # close run loop
