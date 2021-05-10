@@ -145,29 +145,40 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
 
         cat dfile.run-*_{phase}.1D > dfile_rall_{phase}.1D
 
-        1d_tool.py -infile dfile_rall_{phase}.1D \
+        1d_tool.py \
+            -infile dfile_rall_{phase}.1D \
             -set_nruns {num_run} \
             -demean \
-            -write motion_demean_{phase}.1D
+            -write \
+            motion_demean_{phase}.1D
 
-        1d_tool.py -infile dfile_rall_{phase}.1D \
+        1d_tool.py \
+            -infile dfile_rall_{phase}.1D \
             -set_nruns {num_run} \
             -derivative \
             -demean \
-            -write motion_deriv_{phase}.1D
+            -write \
+            motion_deriv_{phase}.1D
 
-        1d_tool.py -infile motion_demean_{phase}.1D \
+        1d_tool.py \
+            -infile motion_demean_{phase}.1D \
             -set_nruns {num_run} \
-            -split_into_pad_runs mot_demean_{phase}
+            -split_into_pad_runs \
+            mot_demean_{phase}
 
-        1d_tool.py -infile dfile_rall_{phase}.1D \
+        1d_tool.py \
+            -infile dfile_rall_{phase}.1D \
             -set_nruns {num_run} \
             -show_censor_count \
             -censor_prev_TR \
-            -censor_motion 0.3 motion_{phase}
+            -censor_motion 0.3 \
+            motion_{phase}
 
         cat out.cen.run-*{phase}.1D > outcount_censor_{phase}.1D
-        1deval -a motion_{phase}_censor.1D -b outcount_censor_{phase}.1D \
+
+        1deval \
+            -a motion_{phase}_censor.1D \
+            -b outcount_censor_{phase}.1D \
             -expr "a*b" > censor_{phase}_combined.1D
     """
     if not os.path.exists(os.path.join(work_dir, f"censor_{phase}_combined.1D")):
@@ -270,10 +281,21 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
     if not os.path.exists(os.path.join(work_dir, f"{phase}_WMe_rall+tlrc.HEAD")):
         h_cmd = f"""
             cd {work_dir}
+
             3dTcat -prefix tmp_allRuns_{phase} run-*{phase}_scale+tlrc.HEAD
-            3dcalc -a tmp_allRuns_{phase}+tlrc -b final_mask_WM_eroded+tlrc \
-                -expr 'a*bool(b)' -datum float -prefix tmp_allRuns_{phase}_WMe
-            3dmerge -1blur_fwhm 20 -doall -prefix {phase}_WMe_rall tmp_allRuns_{phase}_WMe+tlrc
+
+            3dcalc \
+                -a tmp_allRuns_{phase}+tlrc \
+                -b final_mask_WM_eroded+tlrc \
+                -expr 'a*bool(b)' \
+                -datum float \
+                -prefix tmp_allRuns_{phase}_WMe
+
+            3dmerge \
+                -1blur_fwhm 20 \
+                -doall \
+                -prefix {phase}_WMe_rall \
+                tmp_allRuns_{phase}_WMe+tlrc
         """
         func_sbatch(h_cmd, 1, 4, 1, f"{sub_num}wts", work_dir)
 
@@ -283,14 +305,20 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
         if not os.path.exists(
             os.path.join(work_dir, f"{phase}_{desc}_stats_REML+tlrc.HEAD")
         ):
-            h_cmd = f"cd {work_dir} \n tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc"
+            h_cmd = f"""
+                cd {work_dir}
+                tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc
+            """
             func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
     elif type(time_files) == dict:
         for desc in time_files:
             if not os.path.exists(
                 os.path.join(work_dir, f"{phase}_{desc}_stats_REML+tlrc.HEAD")
             ):
-                h_cmd = f"cd {work_dir} \n tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc"
+                h_cmd = f"""
+                    cd {work_dir}
+                    tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc
+                """
                 func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
 
 
