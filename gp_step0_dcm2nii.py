@@ -9,6 +9,8 @@ Notes:
 3) Gets submitted from wrapper script, will generate sbatch
     subprocesses for each dcm2nii command.
 
+Subject specific patches - sub-010
+
 TODO:
   1) resolve the multiple T1w issue
 """
@@ -87,7 +89,7 @@ def func_dcm2nii(
 def func_job(dcm_tar, data_dir, work_dir, source_dir, scan_dict, slurm_dir):
 
     # # for testing
-    # dcm_tar = "Mattfeld_REVL-000-vCAT-005-S1.tar.gz"
+    # dcm_tar = "Mattfeld_REVL-000-vCAT-010-S1.tar.gz"
     # data_dir = "/home/data/madlab/Mattfeld_vCAT/sourcedata"
     # work_dir = "/scratch/madlab/nate_vCAT/dset"
     # source_dir = "/scratch/madlab/nate_vCAT/sourcedata"
@@ -133,6 +135,11 @@ def func_job(dcm_tar, data_dir, work_dir, source_dir, scan_dict, slurm_dir):
                     and "dMRI" not in x
                     and "32" not in x
                 ]
+
+                # patchy-patch for problem child
+                if "sub-010" in subj and "loc" in run:
+                    h_list.remove("8-fMRI_REVL_ROI_loc_1")
+
                 func_dcm2nii(
                     h_list, run, scan, out_dir, scan_dir, subj, sess, slurm_dir
                 )
