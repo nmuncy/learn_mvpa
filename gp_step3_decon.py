@@ -30,18 +30,21 @@ from gp_step0_dcm2nii import func_sbatch
 
 # %%
 def func_decon(
-    run_files, mot_files, tf_dict, cen_file, h_phase, h_type, h_desc, work_dir
+    run_files, tf_dict, cen_file, h_phase, h_type, h_desc, work_dir, dmn_list, drv_list
 ):
 
     # build epi list for -input
-    in_files = ""
+    in_files = []
     for fil in run_files:
-        in_files += f"{fil.split('.')[0]} "
+        in_files.append(f"{fil.split('.')[0]}")
 
     # build censor arguments
-    reg_base = ""
-    for c, mot in enumerate(mot_files):
-        reg_base += f"-ortvec {mot} mot_demean_run{c+1} "
+    reg_base = []
+    for cmot, mot in enumerate(dmn_list):
+        reg_base.append(f"-ortvec {mot} mot_dmn_run{cmot + 1}")
+
+    for cmot, mot in enumerate(drv_list):
+        reg_base.append(f"-ortvec {mot} mot_drv_run{cmot + 1}")
 
     # determine tr
     h_cmd = f"module load afni-20.2.06 \n 3dinfo -tr {work_dir}/{run_files[0]}"
@@ -50,25 +53,21 @@ def func_decon(
     len_tr = float(h_len_tr.decode("utf-8").strip())
 
     # determine, build behavior regressors
-    reg_beh = ""
+    reg_beh = []
     for c_beh, beh in enumerate(tf_dict):
         if h_type == "dmBLOCK":
-            reg_beh += f"""
-                -stim_times_AM1 {c_beh + 1} {tf_dict[beh]} "dmBLOCK(1)"
-                -stim_label {c_beh + 1} {beh}
-            """
+            reg_beh.append(f"-stim_times_AM1 {c_beh + 1} {tf_dict[beh]} 'dmBLOCK(1)'")
+            reg_beh.append(f"-stim_label {c_beh + 1} {beh}")
 
         elif h_type == "GAM":
-            reg_beh += f"""
-                -stim_times {c_beh + 1} {tf_dict[beh]} "GAM"
-                -stim_label {c_beh + 1} {beh}
-            """
+            reg_beh.append(f"-stim_times {c_beh + 1} {tf_dict[beh]} 'GAM'")
+            reg_beh.append(f"-stim_label {c_beh + 1} {beh}")
 
         elif h_type == "2GAM":
-            reg_beh += f"""
-                -stim_times {c_beh + 1} {tf_dict[beh]} "TWOGAMpw(4,5,0.2,12,7)"
-                -stim_label {c_beh + 1} {beh}
-            """
+            reg_beh.append(
+                f"-stim_times {c_beh + 1} {tf_dict[beh]} 'TWOGAMpw(4,5,0.2,12,7)'"
+            )
+            reg_beh.append(f"-stim_label {c_beh + 1} {beh}")
 
         elif h_type == "TENT":
 
@@ -85,17 +84,12 @@ def func_decon(
                         if s:
                             tmp_num = s.string.split("\t")[0]
                 tent_len = round(12 + float(tmp_num))
-
             tent_args = ["0", str(tent_len), str(round(tent_len / len_tr))]
 
-            reg_beh += f"""
-                -stim_times {c_beh + 1} timing_files/{tf_dict[beh]} 'TENT({",".join(tent_args)})'
-                -stim_label {c_beh + 1} {beh}
-            """
-
-    # clean up behavior regressor argument,
-    #   put into single line
-    reg_args = reg_beh.lstrip().replace("\n", " ")
+            reg_beh.append(
+                f"""-stim_times {c_beh + 1} timing_files/{tf_dict[beh]} 'TENT({",".join(tent_args)})'"""
+            )
+            reg_beh.append(f"-stim_label {c_beh + 1} {beh}")
 
     # set output str
     h_out = f"{h_phase}_{h_desc}"
@@ -105,14 +99,14 @@ def func_decon(
         3dDeconvolve \\
             -x1D_stop \\
             -GOFORIT \\
-            -input {in_files} \\
+            -input {" ".join(in_files)} \\
             -censor {cen_file} \\
-            {reg_base} \\
+            {" ".join(reg_base)} \\
             -polort A \\
             -float \\
             -local_times \\
             -num_stimts {len(tf_dict.keys())} \\
-            {reg_args} \\
+            {" ".join(reg_beh)} \\
             -jobs 1 \\
             -x1D X.{h_out}.xmat.1D \\
             -xjpeg X.{h_out}.jpg \\
@@ -126,209 +120,215 @@ def func_decon(
 
 
 # %%
-# def func_job(phase, decon_type, work_dir, sub_num, time_files):
+def func_job(phase, decon_type, work_dir, sub_num, time_files):
 
-# For testing
-subj = "sub-031"
-sess = "ses-S1"
-phase = "Study"
-decon_type = "TENT"
-sub_num = subj.split("-")[1]
-par_dir = "/scratch/madlab/nate_vCAT"
-work_dir = os.path.join(par_dir, "derivatives", subj, sess)
-with open(os.path.join(work_dir, "decon_dict.json")) as json_file:
-    decon_dict = json.load(json_file)
-time_files = decon_dict[phase]
+    # # For testing
+    # subj = "sub-031"
+    # sess = "ses-S1"
+    # phase = "Study"
+    # decon_type = "TENT"
+    # sub_num = subj.split("-")[1]
+    # par_dir = "/scratch/madlab/nate_vCAT"
+    # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+    # # with open(os.path.join(work_dir, "decon_dict.json")) as json_file:
+    # #     decon_dict = json.load(json_file)
+    # time_files = decon_dict[phase]
 
-"""
-Step 1: Make motion regressors
+    # %%
+    """
+    Step 1: Make motion regressors
 
-Creates motion, demean, and derivative files. Demeaned
-    are the ones used in the deconvolution.
+    Creates motion, demean, and derivative files. Demeaned
+        are the ones used in the deconvolution.
 
-Censor file is combination of 2 things:
-    1) Censors based on >0.3 rot/translation relative to previous
-        volume. Previous volume censored also.
-    2) Which volumes had >10% outlier voxels.
-"""
+    Censor file is combination of 2 things:
+        1) Censors based on >0.3 rot/translation relative to previous
+            volume. Previous volume censored also.
+        2) Which volumes had >10% outlier voxels.
+    """
 
-# make list of pre-processed epi files
-run_list = [
-    x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"*{phase}_scale+tlrc.HEAD")
-]
-num_run = len(run_list)
-run_list.sort()
+    # make list of pre-processed epi files
+    run_list = [
+        x
+        for x in os.listdir(work_dir)
+        if fnmatch.fnmatch(x, f"*{phase}_scale+tlrc.HEAD")
+    ]
+    num_run = len(run_list)
+    run_list.sort()
 
-# build motion, censor files
-h_cmd = f"""
-    cd {work_dir}
+    # build motion, censor files
+    h_cmd = f"""
+        cd {work_dir}
 
-    cat dfile.run-*_{phase}.1D > dfile_rall_{phase}.1D
+        cat dfile.run-*_{phase}.1D > dfile_rall_{phase}.1D
 
-    1d_tool.py \
-        -infile dfile_rall_{phase}.1D \
-        -set_nruns {num_run} \
-        -demean \
-        -write \
-        motion_demean_{phase}.1D
+        # make motion files
+        1d_tool.py \
+            -infile dfile_rall_{phase}.1D \
+            -set_nruns {num_run} \
+            -demean \
+            -write \
+            motion_demean_{phase}.1D
 
-    1d_tool.py \
-        -infile dfile_rall_{phase}.1D \
-        -set_nruns {num_run} \
-        -derivative \
-        -demean \
-        -write \
-        motion_deriv_{phase}.1D
+        1d_tool.py \
+            -infile dfile_rall_{phase}.1D \
+            -set_nruns {num_run} \
+            -derivative \
+            -demean \
+            -write \
+            motion_deriv_{phase}.1D
 
-    1d_tool.py \
-        -infile motion_demean_{phase}.1D \
-        -set_nruns {num_run} \
-        -split_into_pad_runs \
-        mot_demean_{phase}
+        # split into runs
+        1d_tool.py \
+            -infile motion_demean_{phase}.1D \
+            -set_nruns {num_run} \
+            -split_into_pad_runs \
+            mot_demean_{phase}
 
-    1d_tool.py \
-        -infile dfile_rall_{phase}.1D \
-        -set_nruns {num_run} \
-        -show_censor_count \
-        -censor_prev_TR \
-        -censor_motion 0.3 \
-        motion_{phase}
+        1d_tool.py \
+            -infile motion_deriv_{phase}.1D \
+            -set_nruns {num_run} \
+            -split_into_pad_runs \
+            mot_deriv_{phase}
 
-    cat out.cen.run-*{phase}.1D > outcount_censor_{phase}.1D
+        # make censor file
+        1d_tool.py \
+            -infile dfile_rall_{phase}.1D \
+            -set_nruns {num_run} \
+            -show_censor_count \
+            -censor_prev_TR \
+            -censor_motion 0.3 \
+            motion_{phase}
 
-    1deval \
-        -a motion_{phase}_censor.1D \
-        -b outcount_censor_{phase}.1D \
-        -expr "a*b" > censor_{phase}_combined.1D
-"""
-if not os.path.exists(os.path.join(work_dir, f"censor_{phase}_combined.1D")):
-    func_sbatch(h_cmd, 1, 1, 1, f"{sub_num}mot", work_dir)
+        cat out.cen.run-*{phase}.1D > outcount_censor_{phase}.1D
 
-# %%
-"""
-Step 2: Deconvolve
+        1deval \
+            -a motion_{phase}_censor.1D \
+            -b outcount_censor_{phase}.1D \
+            -expr "a*b" > censor_{phase}_combined.1D
+    """
+    if not os.path.exists(os.path.join(work_dir, f"censor_{phase}_combined.1D")):
+        func_sbatch(h_cmd, 1, 1, 1, f"{sub_num}mot", work_dir)
 
-Uses 3dDeconvolve to generate matrix. 3dREMLfit is then used
-    to do a GLS with an ARMA function.
+    # %%
+    """
+    Step 2: Deconvolve
 
-White matter time series is used as a nuissance regressor.
+    Uses 3dDeconvolve to generate matrix. 3dREMLfit is then used
+        to do a GLS with an ARMA function.
 
-Deconvolve script written for review.
+    White matter time series is used as a nuissance regressor.
 
-Base models include pmBLOCK, GAM, and TWOGAMpw.
-"""
+    Deconvolve script written for review.
 
-# Get motion files
-mot_list = [
-    x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"mot_demean_{phase}.*.1D")
-]
-mot_list.sort()
+    Base models include pmBLOCK, GAM, and TWOGAMpw.
+    """
 
-if type(time_files) == list:
+    # Get motion files
+    dmn_list = [
+        x
+        for x in os.listdir(work_dir)
+        if fnmatch.fnmatch(x, f"mot_demean_{phase}.*.1D")
+    ]
+    dmn_list.sort()
 
-    desc = "single"  # single is just a place holder
+    drv_list = [
+        x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"mot_deriv_{phase}.*.1D")
+    ]
+    drv_list.sort()
 
-    # make timing file dictionary
-    tf_dict = {}
-    for tf in time_files:
-        beh = tf.split("_")[-1].split(".")[0]
-        tf_dict[beh] = tf
+    if type(time_files) == list:
 
-    # write decon script (for review)
-    decon_script = os.path.join(work_dir, f"decon_{phase}_{desc}.sh")
-    with open(decon_script, "w") as script:
-        script.write(
-            func_decon(
-                run_list,
-                mot_list,
-                tf_dict,
-                f"censor_{phase}_combined.1D",
-                phase,
-                decon_type,
-                desc,
-                work_dir,
-            )
-        )
+        desc = "single"  # single is just a place holder
 
-elif type(time_files) == dict:
-    for desc in time_files:
-        # desc = "BE"
-
+        # make timing file dictionary
         tf_dict = {}
-        for tf in time_files[desc]:
+        for tf in time_files:
             beh = tf.split("_")[-1].split(".")[0]
             tf_dict[beh] = tf
 
+        # write decon script (for review)
         decon_script = os.path.join(work_dir, f"decon_{phase}_{desc}.sh")
         with open(decon_script, "w") as script:
             script.write(
                 func_decon(
                     run_list,
-                    mot_list,
                     tf_dict,
                     f"censor_{phase}_combined.1D",
                     phase,
                     decon_type,
                     desc,
                     work_dir,
+                    dmn_list,
+                    drv_list,
                 )
             )
 
-# %%
-# gather scripts of phase
-script_list = [
-    x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"decon_{phase}*.sh")
-]
+    elif type(time_files) == dict:
+        for desc in time_files:
+            # desc = "BE"
 
-# run decon script to generate matrices
-for script in script_list:
-    desc = script.split("_")[-1].split(".")[0]
-    if not os.path.exists(os.path.join(work_dir, f"X.{phase}_{desc}.xmat.1D")):
-        h_cmd = f"""
-            module load afni-20.2.06
-            cd {work_dir}
-            source {script}
-        """
-        h_decon = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-        h_decon.wait()
+            tf_dict = {}
+            for tf in time_files[desc]:
+                beh = tf.split("_")[-1].split(".")[0]
+                tf_dict[beh] = tf
 
+            decon_script = os.path.join(work_dir, f"decon_{phase}_{desc}.sh")
+            with open(decon_script, "w") as script:
+                script.write(
+                    func_decon(
+                        run_list,
+                        tf_dict,
+                        f"censor_{phase}_combined.1D",
+                        phase,
+                        decon_type,
+                        desc,
+                        work_dir,
+                        dmn_list,
+                        drv_list,
+                    )
+                )
 
-# %%
-# generate WM timeseries
-if not os.path.exists(os.path.join(work_dir, f"{phase}_WMe_rall+tlrc.HEAD")):
-    h_cmd = f"""
-        cd {work_dir}
+    # %%
+    # gather scripts of phase
+    script_list = [
+        x for x in os.listdir(work_dir) if fnmatch.fnmatch(x, f"decon_{phase}*.sh")
+    ]
 
-        3dTcat -prefix tmp_allRuns_{phase} run-*{phase}_scale+tlrc.HEAD
-
-        3dcalc \
-            -a tmp_allRuns_{phase}+tlrc \
-            -b final_mask_WM_eroded+tlrc \
-            -expr 'a*bool(b)' \
-            -datum float \
-            -prefix tmp_allRuns_{phase}_WMe
-
-        3dmerge \
-            -1blur_fwhm 20 \
-            -doall \
-            -prefix {phase}_WMe_rall \
-            tmp_allRuns_{phase}_WMe+tlrc
-    """
-    func_sbatch(h_cmd, 1, 4, 1, f"{sub_num}wts", work_dir)
-
-# run REML
-if type(time_files) == list:
-    desc = "decon"
-    if not os.path.exists(
-        os.path.join(work_dir, f"{phase}_{desc}_stats_REML+tlrc.HEAD")
-    ):
+    # run decon script to generate matrices
+    for dcn_script in script_list:
         h_cmd = f"""
             cd {work_dir}
-            tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc
+            source {os.path.join(work_dir, dcn_script)}
         """
-        func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
-elif type(time_files) == dict:
-    for desc in time_files:
+        func_sbatch(h_cmd, 1, 1, 1, f"{sub_num}dcn", work_dir)
+
+    # %%
+    # generate WM timeseries
+    if not os.path.exists(os.path.join(work_dir, f"{phase}_WMe_rall+tlrc.HEAD")):
+        h_cmd = f"""
+            cd {work_dir}
+
+            3dTcat -prefix tmp_allRuns_{phase} run-*{phase}_scale+tlrc.HEAD
+
+            3dcalc \
+                -a tmp_allRuns_{phase}+tlrc \
+                -b final_mask_WM_eroded+tlrc \
+                -expr 'a*bool(b)' \
+                -datum float \
+                -prefix tmp_allRuns_{phase}_WMe
+
+            3dmerge \
+                -1blur_fwhm 20 \
+                -doall \
+                -prefix {phase}_WMe_rall \
+                tmp_allRuns_{phase}_WMe+tlrc
+        """
+        func_sbatch(h_cmd, 1, 4, 1, f"{sub_num}wts", work_dir)
+
+    # run REML
+    if type(time_files) == list:
+        desc = "single"
         if not os.path.exists(
             os.path.join(work_dir, f"{phase}_{desc}_stats_REML+tlrc.HEAD")
         ):
@@ -337,6 +337,16 @@ elif type(time_files) == dict:
                 tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc
             """
             func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
+    elif type(time_files) == dict:
+        for desc in time_files:
+            if not os.path.exists(
+                os.path.join(work_dir, f"{phase}_{desc}_stats_REML+tlrc.HEAD")
+            ):
+                h_cmd = f"""
+                    cd {work_dir}
+                    tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc
+                """
+                func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
 
 
 # receive arguments
