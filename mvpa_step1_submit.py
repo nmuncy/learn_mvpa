@@ -33,6 +33,7 @@ task_dict = {
         "FP": ["Ffpc", "Fspc"],
     },
 }
+atropos_dir = "/home/data/madlab/atlases/vold2_mni/priors_ACT"
 
 
 # %%
@@ -53,7 +54,7 @@ def func_mask(msk_deriv_dir, msk_subj_list):
         mask_list = []
         for subj in msk_subj_list:
             mask_file = os.path.join(
-                msk_deriv_dir, subj, "ses-S1/mask_epi_anat+tlrc.HEAD"
+                msk_deriv_dir, subj, f"{sess}/mask_epi_anat+tlrc.HEAD"
             )
             if os.path.exists(mask_file):
                 mask_list.append(mask_file.split(".")[0])
@@ -61,30 +62,47 @@ def func_mask(msk_deriv_dir, msk_subj_list):
         # combine anat-epi intersection masks of all subjs
         if not os.path.exists(os.path.join(group_dir, "Group_epi_int.nii.gz")):
             h_cmd = f"""
-                # module load afni-20.2.06
                 3dMean -prefix {group_dir}/Group_epi_mean.nii.gz {" ".join(mask_list)}
-                3dmask_tool -input {" ".join(mask_list)} -frac 1 -prefix {group_dir}/Group_epi_int.nii.gz
+
+                3dmask_tool \
+                    -input {" ".join(mask_list)} \
+                    -frac 1 \
+                    -prefix {group_dir}/Group_epi_int.nii.gz
             """
-            # subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE).wait()
             func_sbatch(h_cmd, 1, 1, 1, "grpEpi", group_dir)
 
         # make GM mask, GM intersection mask
         if not os.path.exists(os.path.join(group_dir, "Group_Int_Mask.nii.gz")):
-            atropos_dir = "/home/data/madlab/atlases/vold2_mni/priors_ACT"
             h_cmd = f"""
                 module load c3d-1.0.0-gcc-8.2.0
-                # module load afni-20.2.06
-
                 cd {group_dir}
-                c3d {atropos_dir}/Prior2.nii.gz {atropos_dir}/Prior4.nii.gz -add -o tmp_Prior_GM.nii.gz
-                3dresample -master {mask_list[0]} -rmode NN -input tmp_Prior_GM.nii.gz -prefix tmp_Template_GM_mask.nii.gz
 
-                c3d tmp_Template_GM_mask.nii.gz Group_epi_int.nii.gz -multiply -o tmp_Intersection_GM_prob_mask.nii.gz
-                c3d tmp_Intersection_GM_prob_mask.nii.gz -thresh 0.1 1 1 0 -o Group_Int_Mask.nii.gz
+                c3d \
+                    {atropos_dir}/Prior2.nii.gz \
+                    {atropos_dir}/Prior4.nii.gz \
+                    -add \
+                    -o tmp_Prior_GM.nii.gz
+
+                3dresample \
+                    -master {mask_list[0]} \
+                    -rmode NN \
+                    -input tmp_Prior_GM.nii.gz \
+                    -prefix tmp_Template_GM_mask.nii.gz
+
+                c3d \
+                    tmp_Template_GM_mask.nii.gz \
+                    Group_epi_int.nii.gz \
+                    -multiply \
+                    -o tmp_Intersection_GM_prob_mask.nii.gz
+
+                c3d \
+                    tmp_Intersection_GM_prob_mask.nii.gz \
+                    -thresh 0.1 1 1 0 \
+                    -o Group_Int_Mask.nii.gz
+
                 rm tmp_*
             """
             func_sbatch(h_cmd, 1, 1, 1, "grpInt", group_dir)
-            # subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE).wait()
 
 
 # %%

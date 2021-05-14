@@ -22,12 +22,18 @@ def func_lenRun(lrn_subj_dir, lrn_phase):
     """
 
     # determine number of volumes
-    h_cmd = f"module load afni-20.2.06 \n 3dinfo -ntimes {lrn_subj_dir}/run-1_{lrn_phase}_scale+tlrc"
+    h_cmd = f"""
+        module load afni-20.2.06
+        3dinfo -ntimes {lrn_subj_dir}/run-1_{lrn_phase}_scale+tlrc
+    """
     h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     num_nvol = int(h_nvol.communicate()[0].decode("utf-8").strip())
 
     # determine TR len
-    h_cmd = f"module load afni-20.2.06 \n 3dinfo -tr {lrn_subj_dir}/run-1_{lrn_phase}_scale+tlrc"
+    h_cmd = f"""
+        module load afni-20.2.06
+        3dinfo -tr {lrn_subj_dir}/run-1_{lrn_phase}_scale+tlrc
+    """
     h_tr = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     len_tr = float(h_tr.communicate()[0].decode("utf-8").strip())
 
@@ -84,9 +90,12 @@ def func_timing(
         # make 1D file per run
         h_cmd = f"""
             module load afni-20.2.06
-            timing_tool.py -timing {tim_subj_dir}/tf_{tim_phase}_{beh}.txt \
-                -tr {tim_hdr_dict["LenTR"]} -stim_dur {beh_dur} \
-                -run_len {tim_hdr_dict["LenRun"]} -timing_to_1D \
+            timing_tool.py \
+                -timing {tim_subj_dir}/tf_{tim_phase}_{beh}.txt \
+                -tr {tim_hdr_dict["LenTR"]} \
+                -stim_dur {beh_dur} \
+                -run_len {tim_hdr_dict["LenRun"]} \
+                -timing_to_1D \
                 {tim_subj_dir}/tmp_tf_{tim_phase}_{beh}.1D
         """
         h_spl = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
@@ -117,9 +126,9 @@ def func_timing(
     for beh in tim_beh_list:
         df_att.loc[df_att[beh] == 1, "att"] = beh
 
-    for i, j in enumerate(df_att["att"]):
-        if df_att[column_list].iloc[i].sum() > 1:
-            df_att.at[i, "att"] = "base"
+    for row, col in enumerate(df_att["att"]):
+        if df_att[column_list].iloc[row].sum() > 1:
+            df_att.at[row, "att"] = "base"
     df_att = df_att.replace(np.nan, "base", regex=True)
 
     # add category (cat) column for afni, 0 = base
