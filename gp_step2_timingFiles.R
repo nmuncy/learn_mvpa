@@ -1,63 +1,56 @@
 
 
-# Get args from wrapper
-args <- commandArgs()
-dataDir <- args[6]
-outDir <- args[7]
-subjStr <- args[8]
-numRuns <- args[9]
-phase <- args[10]
 
 
-# # For testing
-# subjStr <- "vCAT_008"
-# dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
-# outDir <- "~/Desktop/"
-# numRuns <- 4
-# phase <- "task"
-# run <- 1
-# type <- "cond"
-# ind <- 4
 
-
-# ENI duration
-end_dur <- 0.7
-
-
-# Do it
-for(run in 1:numRuns){
-
-  # determine append
-  if (run == 1) {
-    h_ap <- F
-  } else {
-    h_ap <- T
-  }
-
-  if(phase == "loc"){
-
+func_locTime <- function(numRuns, phase, subjStr, dataDir, outDir){
+  
+  ### --- Notes:
+  #
+  # This will make timing and duration files for face, 
+  #   scene, and number times during localizer (orienting)
+  #   task.
+  #
+  # Output format is 1 row per run (AFNI style).
+  #
+  # Timing file is tf_phase_foo.txt
+  #   phase = experiment phase, foo = behavior
+  #
+  # Duration file is dur_phase_foo.txt
+  #   Only a single duration is written per run
+  #   Since all timing is fixed (no duration modulation).
+  
+  for(run in 1:numRuns){
+    
+    # determine append
+    if (run == 1) {
+      h_ap <- F
+    } else {
+      h_ap <- T
+    }
+    
     # get data
-    data_raw <- read.delim(paste0(dataDir,"/", subjStr, "_simp_loc", run, ".csv"), sep = ",")
-
+    data_raw <- read.delim(paste0(dataDir,"/", subjStr, "_simp_", phase, run, ".csv"), sep = ",")
+    
     # get indices
     ind_face <- grep("face_img", data_raw$stim_img)
     ind_scene <- grep("scene_img", data_raw$stim_img)
     ind_num <- grep("^[0-9]", data_raw$stim_img)
-
+    
     # determine block lengths
     for(stim in c("face", "scene", "num")){
-
+      
       h_ind <- get(paste0("ind_",stim))
-
+      
       h_block_end <- vector()
       h_block_start <- vector()
       for(i in 1:length(h_ind)){
-
+        
         # get start
         if(i == 1){
           h_block_start <- c(h_block_start, h_ind[i])
         }
-
+        
         # find break points
         if(h_ind[i]+1 <= range(h_ind)[2]){
           if(h_ind[i+1] > h_ind[i]+1){
@@ -69,7 +62,7 @@ for(run in 1:numRuns){
           h_block_end <- c(h_block_end, h_ind[i])
         }
       }
-
+      
       # make row - marry onset, duration
       if(length(h_block_end) == length(h_block_start)){
         row_input <- vector()
@@ -88,7 +81,7 @@ for(run in 1:numRuns){
       #   appx equal
       h_dur <- sort(table(val_input), decreasing=T)[1]
       dur_input <- names(h_dur)
-
+      
       # write
       out_file <- paste0(outDir, "/tf_loc_", stim,".txt")
       cat(row_input, "\n", file = out_file, append = h_ap, sep = "\t")
@@ -96,25 +89,38 @@ for(run in 1:numRuns){
       cat(dur_input, "\n", file = out_dur, append = h_ap, sep = "\t")
     }
   }
+}
 
-  if(phase == "task"){
-
+func_studyTimeOrig <- function(numRuns, phase, subjStr, dataDir, outDir){
+  
+  # ENI duration
+  end_dur <- 0.7
+  
+  for(run in 1:numRuns){
+    
+    # determine append
+    if (run == 1) {
+      h_ap <- F
+    } else {
+      h_ap <- T
+    }
+    
     # get data
     data_raw <- read.delim(paste0(dataDir, "/", subjStr, "_simp_", phase, run, ".csv"), sep=",")
-
+    
     # replace NA with NR for BL types
     data_raw$k_img[is.na(data_raw$k_img)] <- "NR"
     data_raw$stim[is.na(data_raw$stim)] <- "NR"
-
+    
     # determine onsets for type (BL, cond)
     #   face vs scene
     #   responded, correct vs incorrect
     #   event and preceding event
     for(type in c("cond", "BL")){
-
+      
       # get indices
       ind_hold <- grep(type, data_raw$trialtype)
-
+      
       # start vectors
       for(i in c("face", "scene")){
         for(j in c("prec", "event")){
@@ -135,11 +141,11 @@ for(run in 1:numRuns){
           }
         }
       }
-
+      
       # fill vectors
       #   event = actual trial, precede = trial preceding event
       for(ind in ind_hold){
-
+        
         # account for end of file
         #   if last trial is cond, hardcode duration (2.3s)
         if(is.na(data_raw$onset[ind+1])==F){
@@ -147,17 +153,17 @@ for(run in 1:numRuns){
         }else{
           h_ons_next < round(data_raw$onset[ind] + 2.3, 1)
         }
-
+        
         # calc onset:dur for event
         #   exclude feedback time (0.5s) and ISI (0.6s)
         hold_event_onset <- round(data_raw$onset[ind],1)
         hold_event_dur <- round(h_ons_next - hold_event_onset - end_dur, 1)
         # hold_event_marry <- paste0(hold_event_onset,":",hold_event_dur)
-
+        
         # calc onset:dur for precede
         hold_prec_onset <- round(data_raw$onset[ind-1],1)
         hold_prec_dur <- round(h_ons_next - hold_prec_onset, 1)
-
+        
         # calc onset:dur for fixed
         #   exclude feedback time
         hold_fixed_onset <- round(data_raw$onset[ind-1],1)
@@ -196,7 +202,7 @@ for(run in 1:numRuns){
                 # append fixed onset, duration
                 ons_fixed_face_prec_cor <- c(ons_fixed_face_prec_cor, hold_fixed_onset)
                 dur_fixed_face_prec_cor <- c(dur_fixed_face_prec_cor, hold_fixed_dur)
-
+                
               }else{
                 
                 # onset (prec, cond)
@@ -273,7 +279,7 @@ for(run in 1:numRuns){
               assign(paste0("dur_",type,"_face_prec"), c(hold_pdur, hold_prec_dur))
               
             }else if(data_raw$stim[ind-1] == "scene1" || data_raw$stim[ind-1] == "scene2"){
-            
+              
               # onset
               hold_event <- get(paste0("ons_",type,"_scene_event"))
               assign(paste0("ons_",type,"_scene_event"), c(hold_event, hold_event_onset))
@@ -289,7 +295,7 @@ for(run in 1:numRuns){
             } # close stimulus cond
           } # close type cond
         } # close resp cond
-
+        
       } # close ind loop
       
       # write out
@@ -366,5 +372,84 @@ for(run in 1:numRuns){
         }
       }
     } # close type loop
-  } # close task cond
-} # close run loop
+  } # close run loop
+}
+
+func_studyTimeNew <- function(numRuns, phase, subjStr, dataDir, outDir){
+  
+  # ENI duration
+  isi_dur <- 0.8
+  
+  for(run in 1:numRuns){
+    
+    # determine append
+    if (run == 1) {
+      h_ap <- F
+    } else {
+      h_ap <- T
+    }
+    
+    # get data
+    data_raw <- read.delim(paste0(dataDir, "/", subjStr, "_simp_", phase, run, ".csv"), sep=",")
+    
+    # replace NA with NR for BL types
+    data_raw$k_img[is.na(data_raw$k_img)] <- "NR"
+    data_raw$stim[is.na(data_raw$stim)] <- "NR"
+    
+    # determine location of stim types
+    ind_nr <- which(data_raw$resp == "None")
+    ind_con <- which(data_raw$trialtype == "cond" & data_raw$resp != "None")
+    ind_fix <- which(data_raw$trialtype == "fixed" & data_raw$resp != "None")
+    
+    # determine whether fix precedes BL
+    h_fixBL <- which(data_raw[ind_fix + 1,]$trialtype == "BL")
+    ind_fixBL <- ind_fix[h_fixBL]
+    h_fixNBL <- which(data_raw[ind_fix + 1,]$trialtype != "BL")
+    ind_fixNBL <- ind_fix[h_fixNBL]
+    
+    # grab onset, calc duration, don't include ISI
+    #   Note - fixBL increases index by 2
+    #   Also, most common duration is captured
+    ons_con <- data_raw[ind_con,]$onset
+    h_dur_con <- round(data_raw[ind_con + 1,]$onset - ons_con - isi_dur, 2)
+    dur_con <- as.numeric(names(table(h_dur_con)[1]))
+    
+    ons_fixBL <- data_raw[ind_fixBL,]$onset
+    h_dur_fixBL <- round(data_raw[ind_fixBL + 2,]$onset - ons_fixBL - isi_dur, 2)
+    dur_fixBL <- as.numeric(names(table(h_dur_fixBL)[1]))
+    
+    ons_fixNBL <- data_raw[ind_fixNBL,]$onset
+    h_dur_fixNBL <- round(data_raw[ind_fixNBL + 1,]$onset - ons_fixNBL - isi_dur, 2)
+    dur_fixNBL <- as.numeric(names(table(h_dur_fixNBL)[1]))
+    
+  }
+  
+}
+
+
+# # Get args from wrapper
+# args <- commandArgs()
+# dataDir <- args[6]
+# outDir <- args[7]
+# subjStr <- args[8]
+# numRuns <- args[9]
+# phase <- args[10]
+
+# For testing
+subjStr <- "vCAT_008"
+dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
+outDir <- "~/Desktop/vCAT_time"
+numRuns <- 4
+phase <- "task"
+run <- 1
+# type <- "cond"
+# ind <- 4
+
+
+# work
+if(phase == "loc"){
+  func_locTime(numRuns, phase, subjStr, dataDir, outDir)
+}else if(phase == "task"){
+  func_studyTimeOrig(numRuns, phase, subjStr, dataDir, outDir)
+}
+
