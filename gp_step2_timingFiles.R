@@ -91,7 +91,7 @@ func_locTime <- function(numRuns, phase, subjStr, dataDir, outDir){
   }
 }
 
-func_studyTimeOrig <- function(numRuns, phase, subjStr, dataDir, outDir){
+func_studyTime_old <- function(numRuns, phase, subjStr, dataDir, outDir){
   
   # ENI duration
   end_dur <- 0.7
@@ -375,9 +375,9 @@ func_studyTimeOrig <- function(numRuns, phase, subjStr, dataDir, outDir){
   } # close run loop
 }
 
-func_studyTimeNew <- function(numRuns, phase, subjStr, dataDir, outDir){
+func_studyTime <- function(numRuns, phase, subjStr, dataDir, outDir){
   
-  # ENI duration
+  # isi duration
   isi_dur <- 0.8
   
   for(run in 1:numRuns){
@@ -402,46 +402,59 @@ func_studyTimeNew <- function(numRuns, phase, subjStr, dataDir, outDir){
     ind_fix <- which(data_raw$trialtype == "fixed" & data_raw$resp != "None")
     
     # determine whether fix precedes BL
-    h_fixBL <- which(data_raw[ind_fix + 1,]$trialtype == "BL")
-    ind_fixBL <- ind_fix[h_fixBL]
-    h_fixNBL <- which(data_raw[ind_fix + 1,]$trialtype != "BL")
-    ind_fixNBL <- ind_fix[h_fixNBL]
+    h_fix_bl <- which(data_raw[ind_fix + 1,]$trialtype == "BL")
+    ind_fix_bl <- ind_fix[h_fix_bl]
+    h_fix_nbl <- which(data_raw[ind_fix + 1,]$trialtype != "BL")
+    ind_fix_nbl <- ind_fix[h_fix_nbl]
     
     # grab onset, calc duration, don't include ISI
-    #   Note - fixBL increases index by 2
+    #   Note - fix_bl increases index by 2
     #   Also, most common duration is captured
     ons_con <- data_raw[ind_con,]$onset
-    h_dur_con <- round(data_raw[ind_con + 1,]$onset - ons_con - isi_dur, 2)
+    h_dur_con <- round(data_raw[ind_con + 1,]$onset - ons_con - isi_dur, 1)
     dur_con <- as.numeric(names(table(h_dur_con)[1]))
     
-    ons_fixBL <- data_raw[ind_fixBL,]$onset
-    h_dur_fixBL <- round(data_raw[ind_fixBL + 2,]$onset - ons_fixBL - isi_dur, 2)
-    dur_fixBL <- as.numeric(names(table(h_dur_fixBL)[1]))
+    ons_fix_bl <- data_raw[ind_fix_bl,]$onset
+    h_dur_fix_bl <- round(data_raw[ind_fix_bl + 2,]$onset - ons_fix_bl - isi_dur, 1)
+    dur_fix_bl <- as.numeric(names(table(h_dur_fix_bl)[1]))
     
-    ons_fixNBL <- data_raw[ind_fixNBL,]$onset
-    h_dur_fixNBL <- round(data_raw[ind_fixNBL + 1,]$onset - ons_fixNBL - isi_dur, 2)
-    dur_fixNBL <- as.numeric(names(table(h_dur_fixNBL)[1]))
+    ons_fix_nbl <- data_raw[ind_fix_nbl,]$onset
+    h_dur_fix_nbl <- round(data_raw[ind_fix_nbl + 1,]$onset - ons_fix_nbl - isi_dur, 1)
+    dur_fix_nbl <- as.numeric(names(table(h_dur_fix_nbl)[1]))
     
+    # write out
+    out_tf_con <- paste0(outDir, "/tf_Study_con.txt")
+    out_tf_fix <- paste0(outDir, "/tf_Study_fix.txt")
+    out_tf_fbl <- paste0(outDir, "/tf_Study_fbl.txt")
+    cat(round(ons_con, 1), "\n", file = out_tf_con, append = h_ap, sep = "\t")
+    cat(round(ons_fix_nbl, 1), "\n", file = out_tf_fix, append = h_ap, sep = "\t")
+    cat(round(ons_fix_bl, 1), "\n", file = out_tf_fbl, append = h_ap, sep = "\t")
+    
+    out_dur_con <- paste0(outDir, "/dur_Study_con.txt")
+    out_dur_fix <- paste0(outDir, "/dur_Study_fix.txt")
+    out_dur_fbl <- paste0(outDir, "/dur_Study_fbl.txt")
+    cat(dur_con, "\n", file = out_dur_con, append = h_ap, sep = "\t")
+    cat(dur_fix_nbl, "\n", file = out_dur_fix, append = h_ap, sep = "\t")
+    cat(dur_fix_bl, "\n", file = out_dur_fbl, append = h_ap, sep = "\t")
   }
-  
 }
 
 
-# # Get args from wrapper
-# args <- commandArgs()
-# dataDir <- args[6]
-# outDir <- args[7]
-# subjStr <- args[8]
-# numRuns <- args[9]
-# phase <- args[10]
+# Get args from wrapper
+args <- commandArgs()
+dataDir <- args[6]
+outDir <- args[7]
+subjStr <- args[8]
+numRuns <- args[9]
+phase <- args[10]
 
-# For testing
-subjStr <- "vCAT_008"
-dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
-outDir <- "~/Desktop/vCAT_time"
-numRuns <- 4
-phase <- "task"
-run <- 1
+# # For testing
+# subjStr <- "vCAT_008"
+# dataDir <- paste0("/Users/nmuncy/Projects/learn_mvpa/vCAT_data/", subjStr)
+# outDir <- "~/Desktop/vCAT_time"
+# numRuns <- 2
+# phase <- "loc"
+# run <- 1
 # type <- "cond"
 # ind <- 4
 
@@ -450,6 +463,6 @@ run <- 1
 if(phase == "loc"){
   func_locTime(numRuns, phase, subjStr, dataDir, outDir)
 }else if(phase == "task"){
-  func_studyTimeOrig(numRuns, phase, subjStr, dataDir, outDir)
+  func_studyTime(numRuns, phase, subjStr, dataDir, outDir)
 }
 
