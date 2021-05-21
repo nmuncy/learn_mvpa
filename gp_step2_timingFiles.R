@@ -1,6 +1,12 @@
 
-
-
+### --- Notes:
+#
+# This script will receive args from
+#   wrapper script, and make timing/duration
+#   files for vCAT loc and study (task) phases.
+#
+# New study timing files only models conditional,
+#   fixed, and fixed-BL trials
 
 
 func_locTime <- function(numRuns, phase, subjStr, dataDir, outDir){
@@ -30,7 +36,10 @@ func_locTime <- function(numRuns, phase, subjStr, dataDir, outDir){
     }
     
     # get data
-    data_raw <- read.delim(paste0(dataDir,"/", subjStr, "_simp_", phase, run, ".csv"), sep = ",")
+    data_raw <- read.delim(
+      paste0(dataDir,"/", subjStr, "_simp_", phase, run, ".csv"), 
+      sep = ","
+    )
     
     # get indices
     ind_face <- grep("face_img", data_raw$stim_img)
@@ -69,7 +78,10 @@ func_locTime <- function(numRuns, phase, subjStr, dataDir, outDir){
         val_input <- vector()
         for(i in 1:length(h_block_start)){
           val_start <- round(as.numeric(data_raw$onset[h_block_start[i]]),1)
-          val_dur <- round(as.numeric(data_raw$onset[h_block_end[i]]) - as.numeric(data_raw$onset[h_block_start[i]]), 1)
+          val_dur <- round(
+            as.numeric(data_raw$onset[h_block_end[i]]) - 
+            as.numeric(data_raw$onset[h_block_start[i]]), 
+          1)
           # row_input <- c(row_input, paste0(val_start,":",val_dur))
           row_input <- c(row_input, val_start)
           val_input <- c(val_input, val_dur)
@@ -377,6 +389,13 @@ func_studyTime_old <- function(numRuns, phase, subjStr, dataDir, outDir){
 
 func_studyTime <- function(numRuns, phase, subjStr, dataDir, outDir){
   
+  ### --- Notes:
+  #
+  # This will make timing and duration files for fixed,
+  #   conditional, and fixed trials preceding baseline trials
+  #
+  # Fixed will not include fixed-BL trials
+  
   # isi duration
   isi_dur <- 0.8
   
@@ -390,7 +409,10 @@ func_studyTime <- function(numRuns, phase, subjStr, dataDir, outDir){
     }
     
     # get data
-    data_raw <- read.delim(paste0(dataDir, "/", subjStr, "_simp_", phase, run, ".csv"), sep=",")
+    data_raw <- read.delim(
+      paste0(dataDir, "/", subjStr, "_simp_", phase, run, ".csv"), 
+      sep=","
+    )
     
     # replace NA with NR for BL types
     data_raw$k_img[is.na(data_raw$k_img)] <- "NR"
@@ -415,20 +437,44 @@ func_studyTime <- function(numRuns, phase, subjStr, dataDir, outDir){
     dur_con <- as.numeric(names(table(h_dur_con)[1]))
     
     ons_fix_bl <- data_raw[ind_fix_bl,]$onset
-    h_dur_fix_bl <- round(data_raw[ind_fix_bl + 2,]$onset - ons_fix_bl - isi_dur, 1)
+    h_dur_fix_bl <- round(
+      data_raw[ind_fix_bl + 2,]$onset - ons_fix_bl - isi_dur, 
+      1
+    )
     dur_fix_bl <- as.numeric(names(table(h_dur_fix_bl)[1]))
     
     ons_fix_nbl <- data_raw[ind_fix_nbl,]$onset
-    h_dur_fix_nbl <- round(data_raw[ind_fix_nbl + 1,]$onset - ons_fix_nbl - isi_dur, 1)
+    h_dur_fix_nbl <- round(
+      data_raw[ind_fix_nbl + 1,]$onset - ons_fix_nbl - isi_dur, 
+      1
+    )
     dur_fix_nbl <- as.numeric(names(table(h_dur_fix_nbl)[1]))
     
     # write out
     out_tf_con <- paste0(outDir, "/tf_Study_con.txt")
     out_tf_fix <- paste0(outDir, "/tf_Study_fix.txt")
     out_tf_fbl <- paste0(outDir, "/tf_Study_fbl.txt")
-    cat(round(ons_con, 1), "\n", file = out_tf_con, append = h_ap, sep = "\t")
-    cat(round(ons_fix_nbl, 1), "\n", file = out_tf_fix, append = h_ap, sep = "\t")
-    cat(round(ons_fix_bl, 1), "\n", file = out_tf_fbl, append = h_ap, sep = "\t")
+    cat(
+      round(ons_con, 1), 
+      "\n", 
+      file = out_tf_con, 
+      append = h_ap, 
+      sep = "\t"
+    )
+    cat(
+      round(ons_fix_nbl, 1), 
+      "\n", 
+      file = out_tf_fix, 
+      append = h_ap, 
+      sep = "\t"
+    )
+    cat(
+      round(ons_fix_bl, 1), 
+      "\n", 
+      file = out_tf_fbl, 
+      append = h_ap, 
+      sep = "\t"
+    )
     
     out_dur_con <- paste0(outDir, "/dur_Study_con.txt")
     out_dur_fix <- paste0(outDir, "/dur_Study_fix.txt")
@@ -457,7 +503,6 @@ phase <- args[10]
 # run <- 1
 # type <- "cond"
 # ind <- 4
-
 
 # work
 if(phase == "loc"){
