@@ -28,24 +28,11 @@ decon_dict = {
         "tf_loc_num.txt",
         "tf_loc_scene.txt",
     ],
-    "Study": {
-        "BE": [
-            "tf_Study_Bfe.txt",
-            "tf_Study_Bse.txt",
-        ],
-        "CE": [
-            "tf_Study_cfec.txt",
-            "tf_Study_cfei.txt",
-            "tf_Study_csec.txt",
-            "tf_Study_csei.txt",
-        ],
-        "FP": [
-            "tf_Study_Ffpc.txt",
-            "tf_Study_Ffpi.txt",
-            "tf_Study_Fspc.txt",
-            "tf_Study_Fspi.txt",
-        ],
-    },
+    "Study": [
+        "tf_Study_fix.txt",
+        "tf_Study_con.txt",
+        "tf_Study_fbl.txt",
+    ],
 }
 
 
