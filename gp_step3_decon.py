@@ -334,7 +334,10 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
         ):
             h_cmd = f"""
                 cd {work_dir}
-                tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc
+                tcsh \
+                    -x {phase}_{desc}_stats.REML_cmd \
+                    -dsort {phase}_WMe_rall+tlrc \
+                    -GOFORIT
             """
             func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
     elif type(time_files) == dict:
@@ -344,7 +347,10 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
             ):
                 h_cmd = f"""
                     cd {work_dir}
-                    tcsh -x {phase}_{desc}_stats.REML_cmd -dsort {phase}_WMe_rall+tlrc
+                    tcsh \
+                        -x {phase}_{desc}_stats.REML_cmd \
+                        -dsort {phase}_WMe_rall+tlrc \
+                        -GOFORIT
                 """
                 func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
 

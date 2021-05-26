@@ -7,7 +7,6 @@ code_dir = "/home/nmuncy/compute/learn_mvpa"
 parent_dir = "/scratch/madlab/nate_vCAT"
 
 
-# %%
 def main():
 
     # set up stdout/err capture
@@ -19,8 +18,8 @@ def main():
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    h_out = os.path.join(out_dir, f"out_etac.txt")
-    h_err = os.path.join(out_dir, f"err_etac.txt")
+    h_out = os.path.join(out_dir, "out_etac.txt")
+    h_err = os.path.join(out_dir, "err_etac.txt")
 
     sbatch_job = f"""
         sbatch \

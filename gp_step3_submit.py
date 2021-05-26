@@ -63,10 +63,15 @@ def main():
             ) as outfile:
                 json.dump(decon_dict, outfile)
 
-            check_phase = list(decon_dict.keys())[-1]
-            check_decon = list(decon_dict[list(decon_dict.keys())[-1]])[-1]
-            check_file = f"{check_phase}_{check_decon}_stats_REML+tlrc.HEAD"
-            if not os.path.exists(os.path.join(deriv_dir, subj, sess, check_file)):
+            # quick patch for resubmitting jobs
+            file1 = os.path.join(
+                deriv_dir, subj, sess, "loc_single_stats_REML+tlrc.HEAD"
+            )
+            file2 = os.path.join(
+                deriv_dir, subj, sess, "Study_single_stats_REML+tlrc.HEAD"
+            )
+
+            if not os.path.exists(file1) or not os.path.exists(file2):
                 sbatch_job = f"""
                     sbatch \
                     -J "GP3{subj.split("-")[1]}" -t 30:00:00 --mem=4000 --ntasks-per-node=1 \
