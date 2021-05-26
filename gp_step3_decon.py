@@ -352,7 +352,7 @@ def func_job(phase, decon_type, work_dir, sub_num, time_files):
                         -dsort {phase}_WMe_rall+tlrc \
                         -GOFORIT
                 """
-                func_sbatch(h_cmd, 4, 4, 6, f"{sub_num}rml", work_dir)
+                func_sbatch(h_cmd, 10, 4, 6, f"{sub_num}rml", work_dir)
 
 
 # receive arguments

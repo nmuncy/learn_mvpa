@@ -146,15 +146,17 @@ def func_etac(subj_list, out_dir, deriv_dir, sess):
         cd {out_dir}
 
         # -ETAC_blur 4 6 8
-        3dttest++ \
-        -paired \
-        -mask Group_GM_intersect_mask+tlrc \
-        -prefix loc_FS-N \
-        -prefix_clustsim loc_FS-N_clustsim \
-        -ETAC \
-        -ETAC_opt name=NN1:NN1:2sid:pthr=0.01,0.005,0.001 \
-        -setA A {" ".join(list_A)} \
-        -setB B {" ".join(list_B)}
+        3dttest++ \\
+            -paired \\
+            -mask Group_GM_intersect_mask+tlrc \\
+            -prefix loc_FS-N \\
+            -prefix_clustsim loc_FS-N_clustsim \\
+            -ETAC \\
+            -ETAC_opt name=NN1:NN1:2sid:pthr=0.01,0.005,0.001 \\
+            -setA A {" ".join(list_A)} \\
+            -setB B {" ".join(list_B)}
+
+        3dcopy loc_FS-N_clustsim.NN1.ETACmask.global.2sid.5perc.nii.gz FINAL_loc_FS-N+tlrc
     """
     func_sbatch(h_cmd, 40, 6, 10, "vCATetac", out_dir)
 
@@ -192,7 +194,8 @@ def main():
             func_tentAvg(subj, sess, phase, deriv_dir)
 
     # run etac
-    func_etac(subj_list, out_dir, deriv_dir, sess)
+    if not os.path.exists(os.path.join(out_dir, "FINAL_loc_FS-N+tlrc.HEAD")):
+        func_etac(subj_list, out_dir, deriv_dir, sess)
 
 
 if __name__ == "__main__":
