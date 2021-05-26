@@ -76,10 +76,10 @@ def func_mask(subj_list, deriv_dir, sess, phase_list, atlas_dir, prior_dir, out_
 
 
 # %%
-def func_tentAvg(subj_list, sess, phase, deriv_dir):
+def func_tentAvg(subj, sess, phase, deriv_dir):
 
     # make list of behaviors fo rphase
-    time_dir = os.path.join(deriv_dir, subj_list[0], sess, "timing_files")
+    time_dir = os.path.join(deriv_dir, subj, sess, "timing_files")
     beh_list = [
         x.split("_")[-1].split(".")[0]
         for x in os.listdir(time_dir)
@@ -89,9 +89,7 @@ def func_tentAvg(subj_list, sess, phase, deriv_dir):
     # make list of sub-bricks for behaviors
     #   exclude first, last, and fstat bricks
     beh_dict = {}
-    ref_file = os.path.join(
-        deriv_dir, subj_list[0], sess, f"{phase}_single_stats_REML+tlrc"
-    )
+    ref_file = os.path.join(deriv_dir, subj, sess, f"{phase}_single_stats_REML+tlrc")
     for beh in beh_list:
         h_cmd = f"""
             module load afni-20.2.06
@@ -113,21 +111,20 @@ def func_tentAvg(subj_list, sess, phase, deriv_dir):
     comp_dict["FS"] = beh_dict["face"] + beh_dict["scene"]
 
     # make mean of tents for each comp
-    for subj in subj_list:
-        for comp in comp_dict:
-            if not os.path.exists(
-                os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_{comp}+tlrc.HEAD")
-            ):
-                h_cmd = f"""
-                    module load afni-20.2.06
-                    cd {os.path.join(deriv_dir, subj, sess)}
+    for comp in comp_dict:
+        if not os.path.exists(
+            os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_{comp}+tlrc.HEAD")
+        ):
+            h_cmd = f"""
+                module load afni-20.2.06
+                cd {os.path.join(deriv_dir, subj, sess)}
 
-                    3dTstat \
-                        -prefix {phase}_tentAvg_{comp} \
-                        {phase}_single_stats_REML+tlrc[{",".join(comp_dict[comp])}]
-                """
-                h_avg = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-                h_avg.wait()
+                3dTstat \
+                    -prefix {phase}_tentAvg_{comp} \
+                    {phase}_single_stats_REML+tlrc[{",".join(comp_dict[comp])}]
+            """
+            h_avg = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+            h_avg.wait()
 
 
 # %%
@@ -165,6 +162,7 @@ def func_etac(subj_list, out_dir, deriv_dir, sess):
 # %%
 def main():
 
+    # set vars, lists
     phase_list = ["loc", "Study"]
     sess = "ses-S1"
     deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
@@ -172,17 +170,26 @@ def main():
     atlas_dir = "/home/data/madlab/atlases/vold2_mni"
     prior_dir = os.path.join(atlas_dir, "priors_ACT")
 
+    # group analysis dir
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
+    # get subjects
     subj_list = [x for x in os.listdir(deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
     subj_list.sort()
 
+    # make group gray matter intreset mask
     if not os.path.exists(os.path.join(out_dir, "Group_GM_intersect_mask+tlrc.HEAD")):
         func_mask(subj_list, deriv_dir, sess, phase_list, atlas_dir, prior_dir, out_dir)
 
-    # make average tent for Face+Scene and Number
-    func_tentAvg(subj_list, sess, phase_list[0], deriv_dir)
+    # make average tent for Face+Scene and Number of
+    #   localizer task
+    phase = phase_list[0]
+    for subj in subj_list:
+        file1 = os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_FS+tlrc.HEAD")
+        file2 = os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_num+tlrc.HEAD")
+        if not os.path.exists(file1) or not os.path.exists(file2):
+            func_tentAvg(subj, sess, phase, deriv_dir)
 
     # run etac
     func_etac(subj_list, out_dir, deriv_dir, sess)
