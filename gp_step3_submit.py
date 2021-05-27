@@ -70,7 +70,6 @@ def main():
             file2 = os.path.join(
                 deriv_dir, subj, sess, "Study_single_stats_REML+tlrc.HEAD"
             )
-
             if not os.path.exists(file1) or not os.path.exists(file2):
                 sbatch_job = f"""
                     sbatch \

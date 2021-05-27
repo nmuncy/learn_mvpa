@@ -161,6 +161,33 @@ def func_etac(subj_list, out_dir, deriv_dir, sess):
     func_sbatch(h_cmd, 40, 6, 10, "vCATetac", out_dir)
 
 
+def func_ttest(subj_list, out_dir, deriv_dir, sess):
+
+    # set up ETAC script
+    list_A = []
+    list_B = []
+    for subj in subj_list:
+        list_A.append(
+            f"{subj} {os.path.join(deriv_dir, subj, sess, 'loc_tentAvg_FS+tlrc')}"
+        )
+        list_B.append(
+            f"{subj} {os.path.join(deriv_dir, subj, sess, 'loc_tentAvg_num+tlrc')}"
+        )
+
+    h_cmd = f"""
+        module load afni-20.2.06
+        cd {out_dir}
+
+        3dttest++ \\
+            -paired \\
+            -mask Group_GM_intersect_mask+tlrc \\
+            -prefix loc_FS-N_tt \\
+            -setA A {" ".join(list_A)} \\
+            -setB B {" ".join(list_B)}
+    """
+    func_sbatch(h_cmd, 2, 4, 4, "vCATtt", out_dir)
+
+
 # %%
 def main():
 
@@ -196,6 +223,10 @@ def main():
     # run etac
     if not os.path.exists(os.path.join(out_dir, "FINAL_loc_FS-N+tlrc.HEAD")):
         func_etac(subj_list, out_dir, deriv_dir, sess)
+
+    # run ttest
+    if not os.path.exists(os.path.join(out_dir, "FINAL_loc_FS-N_tt+tlrc.HEAD")):
+        func_ttest(subj_list, out_dir, deriv_dir, sess)
 
 
 if __name__ == "__main__":
