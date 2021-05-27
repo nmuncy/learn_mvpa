@@ -141,13 +141,19 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
             if not os.path.exists(os.path.join(work_dir, f"out.cen.{run}.1D")):
 
                 # calc tr length
-                h_cmd = f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -tr {run}+orig"
+                h_cmd = f"""
+                    module load afni-20.2.06
+                    3dinfo -tr {work_dir}/{run}+orig
+                """
                 h_tr = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
                 h_len_tr = h_tr.communicate()[0]
                 len_tr = h_len_tr.decode("utf-8").strip()
 
                 # calc number of volumes
-                h_cmd = f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -ntimes {run}+orig"
+                h_cmd = f"""
+                    module load afni-20.2.06
+                    3dinfo -ntimes {work_dir}/{run}+orig
+                """
                 h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
                 h_nvol_out = h_nvol.communicate()[0]
                 num_tr = h_nvol_out.decode("utf-8").strip()
@@ -167,7 +173,7 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
 
                     1deval \
                         -a outcount.{run}.1D \
-                        -expr '1-step(a-0.05)' > out.cen.{run}.1D
+                        -expr '1-step(a-0.1)' > out.cen.{run}.1D
                 """
                 func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}out", work_dir)
 
@@ -290,7 +296,10 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
         # determine index of min
         h_cmd = f"""
             module load afni-20.2.06
-            3dTstat -argmin -prefix - {work_dir}/outcount_all.1D\\'
+            3dTstat \
+                -argmin \
+                -prefix - \
+                {work_dir}/outcount_all.1D\\'
         """
         h_mind = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
         h_mind.wait()
@@ -318,7 +327,9 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
         h_cmd = f"""
             module load afni-20.2.06
             cd {work_dir}
-            3dbucket -prefix epi_vrBase {min_run}"[{min_vol}]"
+            3dbucket \
+                -prefix epi_vrBase \
+                {min_run}"[{min_vol}]"
         """
         h_vrb = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
         h_vrb.wait()
@@ -384,7 +395,8 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
             h_cmd = f"""
                 cd {work_dir}
 
-                3dvolreg -verbose \
+                3dvolreg \
+                    -verbose \
                     -zpad 1 \
                     -base epi_vrBase+orig \
                     -1Dfile dfile.{run}.1D \
@@ -398,9 +410,10 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
         if not os.path.exists(os.path.join(work_dir, f"{run}_warp+tlrc.HEAD")):
 
             # get grid size
-            h_cmd = (
-                f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -di {run}+orig"
-            )
+            h_cmd = f"""
+                module load afni-20.2.06
+                3dinfo -di {work_dir}/{run}+orig
+            """
             h_gs = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
             h_gs_out = h_gs.communicate()[0]
             grid_size = h_gs_out.decode("utf-8").strip()
@@ -410,7 +423,8 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
                 module load afni-20.2.06
                 cd {work_dir}
 
-                cat_matvec -ONELINE \
+                cat_matvec \
+                    -ONELINE \
                     anat.un.aff.Xat.1D \
                     struct_al_junk_mat.aff12.1D -I \
                     mat.{run}.vr.aff12.1D > mat.{run}.warp.aff12.1D
@@ -515,9 +529,10 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
         if not os.path.exists(os.path.join(work_dir, f"{run}_blur+tlrc.HEAD")):
 
             # calc voxel dim i
-            h_cmd = (
-                f"module load afni-20.2.06 \n cd {work_dir} \n 3dinfo -di {run}+orig"
-            )
+            h_cmd = f"""
+                module load afni-20.2.06
+                3dinfo -di {work_dir}/{run}+orig
+            """
             h_gs = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
             h_gs_out = h_gs.communicate()[0]
             grid_size = h_gs_out.decode("utf-8").strip()
