@@ -20,6 +20,7 @@ import fnmatch
 code_dir = "/home/nmuncy/compute/learn_mvpa"
 parent_dir = "/scratch/madlab/nate_vCAT"
 sess_dict = {"ses-S1": ["loc", "Study"]}
+blip_toggle = 1  # 1 = on, 0 = off
 
 
 # %%
@@ -64,7 +65,7 @@ def main():
                         --account iacc_madlab --qos pq_madlab \
                         --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
                         python {code_dir}/gp_step1_preproc.py {subj} {sess} \
-                        {parent_dir} {' '.join(sess_dict[sess])}"
+                        {parent_dir} {blip_toggle} {' '.join(sess_dict[sess])}"
                 """
                 sbatch_submit = subprocess.Popen(
                     sbatch_job, shell=True, stdout=subprocess.PIPE
