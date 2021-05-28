@@ -45,7 +45,8 @@ def main():
 
     # determine which subjs to run
     run_list = []
-    h_sess = sess_dict.keys()[0]
+    sess_keys = list(sess_dict.keys())
+    h_sess = sess_keys[0]
     for subj in subj_list:
         check_file = os.path.join(
             parent_dir,
