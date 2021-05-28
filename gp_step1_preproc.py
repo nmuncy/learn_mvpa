@@ -484,27 +484,9 @@ def func_volreg_warp(work_dir, phase_list, subj_num, blip_tog):
         #   simple mask into template space. Just make
         #   mask from warped EPI data
         if not os.path.exists(os.path.join(work_dir, f"tmp_{run}_min+tlrc.HEAD")):
-
-            run_str = f"{run}_blip+orig" if blip_tog == 1 else f"{run}+orig"
-
             h_cmd = f"""
                 module load afni-20.2.06
                 cd {work_dir}
-
-                # 3dcalc \
-                #     -overwrite \
-                #     -a {run_str} \
-                #     -expr 1 \
-                #     -prefix tmp_{run}_mask
-
-                # 3dNwarpApply \
-                #     -master struct_ns+tlrc \
-                #     -dxyz {grid_size} \
-                #     -source tmp_{run}_mask+orig \
-                #     -nwarp 'anat.un.aff.qw_WARP.nii mat.{run}.warp.aff12.1D' \
-                #     -interp cubic \
-                #     -ainterp NN -quiet \
-                #     -prefix {run}_mask_warped
 
                 3dcalc \
                     -overwrite \
@@ -517,7 +499,6 @@ def func_volreg_warp(work_dir, phase_list, subj_num, blip_tog):
                     -prefix tmp_{run}_min \
                     tmp_{run}_mask+tlrc
             """
-            # func_sbatch(h_cmd, 2, 4, 4, f"{subj_num}warm", work_dir)
             h_mask = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
             h_mask.wait()
 
@@ -642,7 +623,6 @@ def func_tiss_masks(work_dir, subj_num, atropos_dict, atropos_dir):
                     cd {work_dir}
                     3dAutomask -prefix tmp_mask.{run} {run}_blur+tlrc
                 """
-                # func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}mau", work_dir)
                 h_mask = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
                 h_mask.wait()
 
@@ -753,15 +733,15 @@ def func_argparser():
 # %%
 def main():
 
-    """ For testing """
-    subj = "sub-005"
-    sess = "ses-S1"
-    phase_list = ["loc", "Study"]
-    blip_tog = 0
+    # """ For testing """
+    # subj = "sub-005"
+    # sess = "ses-S1"
+    # phase_list = ["loc", "Study"]
+    # blip_tog = 0
 
-    par_dir = "/scratch/madlab/nate_vCAT"
-    data_dir = os.path.join(par_dir, "dset", subj, sess)
-    work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+    # par_dir = "/scratch/madlab/nate_vCAT"
+    # data_dir = os.path.join(par_dir, "dset", subj, sess)
+    # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
 
     """ Get passed arguments """
     args = func_argparser().parse_args()
