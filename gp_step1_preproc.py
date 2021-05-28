@@ -750,92 +750,94 @@ def func_argparser():
 
 
 # %%
-# def main():
+def main():
 
-# For testing
-subj = "sub-005"
-sess = "ses-S1"
-phase_list = ["loc", "Study"]
-blip_tog = 1
+    # """ For testing """
+    # subj = "sub-005"
+    # sess = "ses-S1"
+    # phase_list = ["loc", "Study"]
+    # blip_tog = 1
 
-par_dir = "/scratch/madlab/nate_vCAT"
-data_dir = os.path.join(par_dir, "dset", subj, sess)
-work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+    # par_dir = "/scratch/madlab/nate_vCAT"
+    # data_dir = os.path.join(par_dir, "dset", subj, sess)
+    # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
 
-# # get passed arguments
-# args = func_argparser().parse_args()
-# subj = args.h_sub
-# sess = args.h_ses
-# par_dir = args.h_par
-# phase_list = args.h_phl
-# blip_tog = args.h_bt
+    """ Get passed arguments """
+    args = func_argparser().parse_args()
+    subj = args.h_sub
+    sess = args.h_ses
+    par_dir = args.h_par
+    phase_list = args.h_phl
+    blip_tog = args.h_bt
 
-# make some vars
-data_dir = os.path.join(par_dir, "dset", subj, sess)
-work_dir = os.path.join(par_dir, "derivatives", subj, sess)
-subj_num = subj.split("-")[1]
+    """ Make some vars """
+    data_dir = os.path.join(par_dir, "dset", subj, sess)
+    work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+    subj_num = subj.split("-")[1]
 
-# set up deriv
-if not os.path.exists(work_dir):
-    os.makedirs(work_dir)
+    """ Set up deriv """
+    if not os.path.exists(work_dir):
+        os.makedirs(work_dir)
 
-# copy dset niftis to derivatives
-check_func = os.path.join(work_dir, f"run-1_{phase_list[0]}+orig.HEAD")
-if not os.path.exists(check_func):
-    func_copy_data(subj, sess, work_dir, data_dir, phase_list)
+    """ Copy dset niftis to derivatives """
+    check_func = os.path.join(work_dir, f"run-1_{phase_list[0]}+orig.HEAD")
+    if not os.path.exists(check_func):
+        func_copy_data(subj, sess, work_dir, data_dir, phase_list)
 
-# determine outlier voxels per volume
-out_thresh = 0.1
-if not os.path.exists(os.path.join(work_dir, f"out.cen.run-1_{phase_list[0]}.1D")):
-    func_outliers(work_dir, phase_list, subj_num, out_thresh)
+    """ Determine outlier voxels per volume """
+    out_thresh = 0.1
+    if not os.path.exists(os.path.join(work_dir, f"out.cen.run-1_{phase_list[0]}.1D")):
+        func_outliers(work_dir, phase_list, subj_num, out_thresh)
 
-# fmap correct data
-if blip_tog == 1:
-    check_blip = os.path.join(work_dir, f"run-1_{phase_list[0]}_blip+orig.HEAD")
-    if not os.path.exists(check_blip):
-        func_fmap_corr(work_dir, subj_num, phase_list)
+    """ fmap correct data """
+    if blip_tog == 1:
+        check_blip = os.path.join(work_dir, f"run-1_{phase_list[0]}_blip+orig.HEAD")
+        if not os.path.exists(check_blip):
+            func_fmap_corr(work_dir, subj_num, phase_list)
 
-# make volume registration base
-if not os.path.exists(os.path.join(work_dir, "epi_vrBase+orig.HEAD")):
-    func_vrbase(work_dir, phase_list, blip_tog)
+    """ Make volume registration base """
+    if not os.path.exists(os.path.join(work_dir, "epi_vrBase+orig.HEAD")):
+        func_vrbase(work_dir, phase_list, blip_tog)
 
-# calculate normalization vectors
-atlas_dir = "/home/data/madlab/atlases/vold2_mni"
-atlas = os.path.join(atlas_dir, "vold2_mni_brain+tlrc")
-check_diffeo = os.path.join(work_dir, "anat.un.aff.qw_WARP.nii")
-if not os.path.exists(check_diffeo):
-    func_register(atlas, work_dir, subj_num)
+    """ Calculate normalization vectors """
+    atlas_dir = "/home/data/madlab/atlases/vold2_mni"
+    atlas = os.path.join(atlas_dir, "vold2_mni_brain+tlrc")
+    check_diffeo = os.path.join(work_dir, "anat.un.aff.qw_WARP.nii")
+    if not os.path.exists(check_diffeo):
+        func_register(atlas, work_dir, subj_num)
 
-# volreg, warp epi to template space
-check_warp = os.path.join(work_dir, f"run-1_{phase_list[0]}_warp+tlrc.HEAD")
-if not os.path.exists(check_warp):
-    func_volreg_warp(work_dir, phase_list, subj_num, blip_tog)
+    """ Volreg, warp epi to template space """
+    check_warp = os.path.join(work_dir, f"run-1_{phase_list[0]}_warp+tlrc.HEAD")
+    if not os.path.exists(check_warp):
+        func_volreg_warp(work_dir, phase_list, subj_num, blip_tog)
 
-# clean warped data
-check_clean = os.path.join(work_dir, f"run-1_{phase_list[0]}_volreg_clean+tlrc.HEAD")
-if not os.path.exists(check_clean):
-    func_clean_volreg(work_dir, phase_list, subj_num)
+    """ Clean warped data """
+    check_clean = os.path.join(
+        work_dir, f"run-1_{phase_list[0]}_volreg_clean+tlrc.HEAD"
+    )
+    if not os.path.exists(check_clean):
+        func_clean_volreg(work_dir, phase_list, subj_num)
 
-# blur data
-blur_mult = 1.5
-check_blur = os.path.join(work_dir, f"run-1_{phase_list[0]}_blur+tlrc.HEAD")
-if not os.path.exists(check_blur):
-    func_blur(work_dir, subj_num, blur_mult)
+    """ Blur data """
+    blur_mult = 1.5
+    check_blur = os.path.join(work_dir, f"run-1_{phase_list[0]}_blur+tlrc.HEAD")
+    if not os.path.exists(check_blur):
+        func_blur(work_dir, subj_num, blur_mult)
 
-# make tissue masks
-atropos_dict = {1: "CSF", 2: "GMc", 3: "WM", 4: "GMs"}
-atropos_dir = os.path.join(atlas_dir, "priors_ACT")
-check_tiss = os.path.join(work_dir, "final_mask_CSF_eroded+tlrc.HEAD")
-if not os.path.exists(check_tiss):
-    func_tiss_masks(work_dir, subj_num, atropos_dict, atropos_dir)
+    """ Make tissue masks """
+    atropos_dict = {1: "CSF", 2: "GMc", 3: "WM", 4: "GMs"}
+    atropos_dir = os.path.join(atlas_dir, "priors_ACT")
+    check_tiss = os.path.join(work_dir, "final_mask_CSF_eroded+tlrc.HEAD")
+    if not os.path.exists(check_tiss):
+        func_tiss_masks(work_dir, subj_num, atropos_dict, atropos_dir)
 
-# scale data
-check_scale = os.path.join(work_dir, f"run-1_{phase_list[0]}_scale+tlrc.HEAD")
-if not os.path.exists(check_scale):
-    func_scale(work_dir, phase_list, subj_num)
+    """ Scale data """
+    check_scale = os.path.join(work_dir, f"run-1_{phase_list[0]}_scale+tlrc.HEAD")
+    if not os.path.exists(check_scale):
+        func_scale(work_dir, phase_list, subj_num)
 
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
 
 # %%
