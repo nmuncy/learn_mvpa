@@ -437,6 +437,7 @@ def func_volreg_warp(work_dir, phase_list, subj_num, blip_tog):
             """
             func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}vre", work_dir)
 
+        # set up, warp EPI to template
         if not os.path.exists(os.path.join(work_dir, f"{run}_warp+tlrc.HEAD")):
 
             # get grid size
@@ -462,10 +463,10 @@ def func_volreg_warp(work_dir, phase_list, subj_num, blip_tog):
             h_cat = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
             h_cat.wait()
 
-            # warp native epi, mask
+            # warp epi, mask into template space
             nwarp_list = ["anat.un.aff.qw_WARP.nii", f"mat.{run}.warp.aff12.1D"]
             if blip_tog == 1:
-                nwarp_list.append("blip_WARP+orig")
+                nwarp_list.append("blip_warp_For_WARP+orig")
 
             h_cmd = f"""
                 cd {work_dir}
@@ -476,28 +477,48 @@ def func_volreg_warp(work_dir, phase_list, subj_num, blip_tog):
                     -source {run}+orig \
                     -nwarp '{" ".join(nwarp_list)}' \
                     -prefix {run}_warp
+            """
+            func_sbatch(h_cmd, 2, 4, 4, f"{subj_num}war", work_dir)
+
+        # Update - don't waste computation time warping
+        #   simple mask into template space. Just make
+        #   mask from warped EPI data
+        if not os.path.exists(os.path.join(work_dir, f"tmp_{run}_min")):
+
+            run_str = f"{run}_blip+orig" if blip_tog == 1 else f"{run}+orig"
+
+            h_cmd = f"""
+                cd {work_dir}
+
+                # 3dcalc \
+                #     -overwrite \
+                #     -a {run_str} \
+                #     -expr 1 \
+                #     -prefix tmp_{run}_mask
+
+                # 3dNwarpApply \
+                #     -master struct_ns+tlrc \
+                #     -dxyz {grid_size} \
+                #     -source tmp_{run}_mask+orig \
+                #     -nwarp 'anat.un.aff.qw_WARP.nii mat.{run}.warp.aff12.1D' \
+                #     -interp cubic \
+                #     -ainterp NN -quiet \
+                #     -prefix {run}_mask_warped
 
                 3dcalc \
                     -overwrite \
-                    -a {run}_blip+orig \
+                    -a {run}_warp+tlrc \
                     -expr 1 \
                     -prefix tmp_{run}_mask
-
-                3dNwarpApply \
-                    -master struct_ns+tlrc \
-                    -dxyz {grid_size} \
-                    -source tmp_{run}_mask+orig \
-                    -nwarp 'anat.un.aff.qw_WARP.nii mat.{run}.warp.aff12.1D' \
-                    -interp cubic \
-                    -ainterp NN -quiet \
-                    -prefix {run}_mask_warped
 
                 3dTstat \
                     -min \
                     -prefix tmp_{run}_min \
-                    {run}_mask_warped+tlrc
+                    tmp_{run}_mask+tlrc
             """
-            func_sbatch(h_cmd, 2, 4, 4, f"{subj_num}war", work_dir)
+            # func_sbatch(h_cmd, 2, 4, 4, f"{subj_num}warm", work_dir)
+            h_mask = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+            h_mask.wait()
 
 
 def func_clean_volreg(work_dir, phase_list, subj_num):
@@ -779,14 +800,15 @@ if not os.path.exists(os.path.join(work_dir, "epi_vrBase+orig.HEAD")):
     func_vrbase(work_dir, phase_list, blip_tog)
 
 # calculate normalization vectors
-atlas = "/home/data/madlab/atlases/vold2_mni/vold2_mni_brain+tlrc"
-check_warp = os.path.join(work_dir, f"run-1_{phase_list[0]}_warp+tlrc.HEAD")
-if not os.path.exists(check_warp):
+atlas_dir = "/home/data/madlab/atlases/vold2_mni"
+atlas = os.path.join(atlas_dir, "vold2_mni_brain+tlrc")
+check_diffeo = os.path.join(work_dir, "anat.un.aff.qw_WARP.nii")
+if not os.path.exists(check_diffeo):
     func_register(atlas, work_dir, subj_num)
 
 # volreg, warp epi to template space
-check_diffeo = os.path.join(work_dir, "anat.un.aff.qw_WARP.nii")
-if not os.path.exists(check_diffeo):
+check_warp = os.path.join(work_dir, f"run-1_{phase_list[0]}_warp+tlrc.HEAD")
+if not os.path.exists(check_warp):
     func_volreg_warp(work_dir, phase_list, subj_num, blip_tog)
 
 # clean warped data
