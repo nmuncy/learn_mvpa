@@ -13,6 +13,7 @@ Notes
 3) Written in Python 3.8, has afni and c3d dependencies.
 """
 
+# %%
 import os
 import subprocess
 import fnmatch
@@ -21,6 +22,7 @@ from argparse import ArgumentParser
 from gp_step0_dcm2nii import func_sbatch
 
 
+# %%
 # helper functions
 def func_epi_list(phase, h_dir):
     h_list = [
@@ -43,6 +45,7 @@ def flatten_list(list_2d):
     return flat_list
 
 
+# %%
 # pipeline functions
 def func_copy_data(subj, sess, work_dir, data_dir, phase_list):
 
@@ -50,9 +53,6 @@ def func_copy_data(subj, sess, work_dir, data_dir, phase_list):
     Step 1: Copy data into work_dir
 
     1) Get func, anat, fmap data. Rename appropriately.
-
-    2) To account for different num of fmaps, will
-        produce AP, PA fmap per run.
     """
 
     # struct
@@ -115,9 +115,6 @@ def func_outliers(work_dir, phase_list, subj_num, out_thresh):
 
     1) Determine the proportion of voxels per volume that have outlier signal.
         Censor volumes that exceed limit.
-
-    2) Correct for signal fallout using fmap. This approach is taken from
-        afni_proc. It uses the fmap to "unwarp" the run epi.
     """
 
     for phase in phase_list:
@@ -148,6 +145,7 @@ def func_outliers(work_dir, phase_list, subj_num, out_thresh):
 
                 # determine percentage outliers for e/volume
                 h_cmd = f"""
+                    module load afni-20.2.06
                     cd {work_dir}
 
                     3dToutcount \
@@ -160,10 +158,24 @@ def func_outliers(work_dir, phase_list, subj_num, out_thresh):
                         -a outcount.{run}.1D \
                         -expr '1-step(a-{out_thresh})' > out.cen.{run}.1D
                 """
-                func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}out", work_dir)
+                h_outc = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+                h_outc.wait()
 
 
 def func_fmap_corr(work_dir, subj_num, phase_list):
+
+    """
+    Step 3: Blip correct data
+
+    1) Calculate median of AP, PA files
+    2) Compute midpoint between media files
+    3) Apply warp to de-distort (unwarp) EPI data
+
+    Note: If acq = LR, fmap = RL:
+        base = LR, source = RL
+        -pmNAMES RL LR
+        unwarp LR with LR_WARP
+    """
 
     # create median datasets and masks
     for h_dir in ["AP", "PA"]:
@@ -184,12 +196,7 @@ def func_fmap_corr(work_dir, subj_num, phase_list):
             """
             func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}med", work_dir)
 
-    # compute midpoint bx AP, PA
-    #
-    # If acq = LR, fmap = RL:
-    #   base = LR, source = RL
-    #   -pmNAMES RL LR
-    #   unwarp LR with LR_WARP
+    # compute midpoint between fmaps
     if not os.path.exists(os.path.join(work_dir, "blip_warp_For_WARP+orig.HEAD")):
         h_cmd = f"""
             cd {work_dir}
@@ -201,8 +208,8 @@ def func_fmap_corr(work_dir, subj_num, phase_list):
                 -blur -1 -1 \
                 -noweight \
                 -minpatch 9 \
-                -source tmp_blip_med_masked_PA+orig \
-                -base tmp_blip_med_masked_AP+orig \
+                -source tmp_med_masked_PA+orig \
+                -base tmp_med_masked_AP+orig \
                 -prefix blip_warp
         """
         func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}qwa", work_dir)
@@ -232,7 +239,7 @@ def func_fmap_corr(work_dir, subj_num, phase_list):
 def func_vrbase(work_dir, phase_list, blip_tog):
 
     """
-    Step 3: Make volreg base
+    Step 4: Make volreg base
 
     1) The volreg base (epi_vrBase) is the single volume in entire experiment
         with the smallest number of outlier volumes.
@@ -334,23 +341,14 @@ def func_vrbase(work_dir, phase_list, blip_tog):
         h_vrb.wait()
 
 
-def func_register(atlas_dir, work_dir, subj_num):
+def func_register(atlas, work_dir, subj_num):
 
     """
-    Step 4: Calc, Perfrom normalization
+    Step 5: Calculate normalization
 
-    1) This step will perform the rigid alignments of T1-EPI (A)
-        EPI-EPI base volume (B), and non-linear diffeomorphic of
-        T1-Template (C). Note blip distortion map (D).
-
-    2) It will then concatenate these warp matrices, and warp EPI data from
-        raw/native space to template space via W=A'+B+C+D. Thus, only one
-        interpolation of the epi data occurs.
-
-    3) Will also censor volumes that have outlier, to not bias scaling
+    1) This step will perform the rigid alignments of T1->EPI
+        and non-linear diffeomorphic of T1->Template.
     """
-
-    # Calculate T1-EPI rigid, T1-Template diffeo
 
     if not os.path.exists(os.path.join(work_dir, "struct_ns+tlrc.HEAD")):
         h_cmd = f"""
@@ -371,7 +369,7 @@ def func_register(atlas_dir, work_dir, subj_num):
                 -tshift off
 
             auto_warp.py \
-                -base {os.path.join(atlas_dir, "vold2_mni_brain+tlrc")} \
+                -base {atlas} \
                 -input struct_ns+orig \
                 -skull_strip_input no
 
@@ -387,6 +385,22 @@ def func_register(atlas_dir, work_dir, subj_num):
 
 
 def func_volreg_warp(work_dir, phase_list, subj_num, blip_tog):
+
+    """
+    Step 6: Warp EPI data to template space
+
+    1) This step will perform the rigid alignments of T1-EPI (A)
+        EPI-EPI base volume (B), and non-linear diffeomorphic of
+        T1-Template (C). Note blip distortion map (D).
+
+    2) Together, then, we will have T1-EPI (A), EPI-EPI base volume (B),
+        and non-linear diffeomorphic of T1-Template (C) and possibly
+        blip distortion map (D) matrices.
+
+    3) It will then concatenate these warp matrices, and warp EPI data from
+        raw/native space to template space via W=A'+B+C+D. Thus, only one
+        interpolation of the epi data occurs.
+    """
 
     scan_dict = {}
     h_str = "_blip+orig" if blip_tog == 1 else "+orig"
@@ -488,6 +502,14 @@ def func_volreg_warp(work_dir, phase_list, subj_num, blip_tog):
 
 def func_clean_volreg(work_dir, phase_list, subj_num):
 
+    """
+    Step 7: Clean volreg data
+
+    1) Censor potentially bad volumes to avoid biasing scale step.
+
+    Note: This rarely has an effect.
+    """
+
     # Determine minimum value, make mask
     #   beware the jabberwocky i.e. expanding braces in 3dMean
     for phase in phase_list:
@@ -527,18 +549,10 @@ def func_clean_volreg(work_dir, phase_list, subj_num):
 def func_blur(work_dir, subj_num, blur_mult):
 
     """
-    Step 5: Blur, Make masks
+    Step 8: Blur EPI data
 
-    1) Blur epi data - 1.5 * voxel dim, rounded up to nearest int. FWHM.
-
-    2) Make a union mask, where sufficient signal exists for both T1w
-        and T2*w at each voxel for analyses. Incorporated at the
-        group-level analysis.
-
-    3) Make tissue masks. The WM mask will be used later to derive
-        nuissance regressors for the REML.
-        Note: this references some custom masks, and is based in
-            atropos rather than in AFNIs tiss seg protocol.
+    1) Blur kernel is size = blur_multiplier * voxel dim,
+        rounded up to nearest int. FWHM.
     """
 
     # Blur
@@ -574,6 +588,19 @@ def func_blur(work_dir, subj_num, blur_mult):
 
 
 def func_tiss_masks(work_dir, subj_num, atropos_dict, atropos_dir):
+
+    """
+    Step 9:  Make union and tissue masks
+
+    1) Make a union mask, where sufficient signal exists for both T1w
+        and T2*w at each voxel for analyses. Incorporated at the
+        group-level analysis.
+
+    2) Make tissue masks. The WM mask will be used later to derive
+        nuissance regressors for the REML.
+        Note: this references some custom masks, and is based in
+            atropos rather than in AFNIs tiss seg protocol.
+    """
 
     epi_list = [
         x.split("_vol")[0]
@@ -668,7 +695,7 @@ def func_tiss_masks(work_dir, subj_num, atropos_dict, atropos_dir):
 def func_scale(work_dir, phase_list, subj_num):
 
     """
-    Step 6: Scale data
+    Step 10: Scale data
 
     1) Data is scaled by mean signal
     """
@@ -701,93 +728,92 @@ def func_argparser():
     return parser
 
 
-def main():
+# %%
+# def main():
 
-    # # For testing
-    # subj = "sub-008"
-    # sess = "ses-S1"
-    # phase_list = ["loc", "Study"]
-    # blip_tog = 1
+# For testing
+subj = "sub-005"
+sess = "ses-S1"
+phase_list = ["loc", "Study"]
+blip_tog = 1
 
-    # par_dir = "/scratch/madlab/nate_vCAT"
-    # data_dir = os.path.join(par_dir, "dset", subj, sess)
-    # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+par_dir = "/scratch/madlab/nate_vCAT"
+data_dir = os.path.join(par_dir, "dset", subj, sess)
+work_dir = os.path.join(par_dir, "derivatives", subj, sess)
 
-    # get passed arguments
-    args = func_argparser().parse_args()
-    subj = args.h_sub
-    sess = args.h_ses
-    par_dir = args.h_par
-    phase_list = args.h_phl
-    blip_tog = args.h_bt
+# # get passed arguments
+# args = func_argparser().parse_args()
+# subj = args.h_sub
+# sess = args.h_ses
+# par_dir = args.h_par
+# phase_list = args.h_phl
+# blip_tog = args.h_bt
 
-    # make some vars
-    data_dir = os.path.join(par_dir, "dset", subj, sess)
-    work_dir = os.path.join(par_dir, "derivatives", subj, sess)
-    subj_num = subj.split("-")[1]
+# make some vars
+data_dir = os.path.join(par_dir, "dset", subj, sess)
+work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+subj_num = subj.split("-")[1]
 
-    # set up deriv
-    if not os.path.exists(work_dir):
-        os.makedirs(work_dir)
+# set up deriv
+if not os.path.exists(work_dir):
+    os.makedirs(work_dir)
 
-    # copy dset niftis to derivatives
-    check_func = os.path.join(work_dir, f"run-1_{phase_list[0]}+orig.HEAD")
-    if not os.path.exists(check_func):
-        func_copy_data(subj, sess, work_dir, data_dir, phase_list)
+# copy dset niftis to derivatives
+check_func = os.path.join(work_dir, f"run-1_{phase_list[0]}+orig.HEAD")
+if not os.path.exists(check_func):
+    func_copy_data(subj, sess, work_dir, data_dir, phase_list)
 
-    # determine outlier voxels per volume
-    out_thresh = 0.1
-    if not os.path.exists(os.path.join(work_dir, f"out.cen.run-1_{phase_list[0]}.1D")):
-        func_outliers(work_dir, phase_list, subj_num, out_thresh)
+# determine outlier voxels per volume
+out_thresh = 0.1
+if not os.path.exists(os.path.join(work_dir, f"out.cen.run-1_{phase_list[0]}.1D")):
+    func_outliers(work_dir, phase_list, subj_num, out_thresh)
 
-    # fmap correct data
-    if blip_tog == 1:
-        check_blip = os.path.join(work_dir, f"run-1_{phase_list[0]}_blip+orig.HEAD")
-        if not os.path.exists(check_blip):
-            func_fmap_corr(work_dir, subj_num, phase_list)
+# fmap correct data
+if blip_tog == 1:
+    check_blip = os.path.join(work_dir, f"run-1_{phase_list[0]}_blip+orig.HEAD")
+    if not os.path.exists(check_blip):
+        func_fmap_corr(work_dir, subj_num, phase_list)
 
-    # make volume registration base
-    if not os.path.exists(os.path.join(work_dir, "epi_vrBase+orig.HEAD")):
-        func_vrbase(work_dir, phase_list, blip_tog)
+# make volume registration base
+if not os.path.exists(os.path.join(work_dir, "epi_vrBase+orig.HEAD")):
+    func_vrbase(work_dir, phase_list, blip_tog)
 
-    # warp data into template space
-    atlas_dir = "/home/data/madlab/atlases/vold2_mni"
-    check_warp = os.path.join(work_dir, f"run-1_{phase_list[0]}_warp+tlrc.HEAD")
-    if not os.path.exists(check_warp):
-        func_register(atlas_dir, work_dir, subj_num)
+# calculate normalization vectors
+atlas = "/home/data/madlab/atlases/vold2_mni/vold2_mni_brain+tlrc"
+check_warp = os.path.join(work_dir, f"run-1_{phase_list[0]}_warp+tlrc.HEAD")
+if not os.path.exists(check_warp):
+    func_register(atlas, work_dir, subj_num)
 
-    # volreg, warp epi to template space
-    check_diffeo = os.path.join(work_dir, "anat.un.aff.qw_WARP.nii")
-    if not os.path.exists(check_diffeo):
-        func_volreg_warp(work_dir, phase_list, subj_num, blip_tog)
+# volreg, warp epi to template space
+check_diffeo = os.path.join(work_dir, "anat.un.aff.qw_WARP.nii")
+if not os.path.exists(check_diffeo):
+    func_volreg_warp(work_dir, phase_list, subj_num, blip_tog)
 
-    # clean warped data
-    check_clean = os.path.join(
-        work_dir, f"run-1_{phase_list[0]}_volreg_clean+tlrc.HEAD"
-    )
-    if not os.path.exists(check_clean):
-        func_clean_volreg(work_dir, phase_list, subj_num)
+# clean warped data
+check_clean = os.path.join(work_dir, f"run-1_{phase_list[0]}_volreg_clean+tlrc.HEAD")
+if not os.path.exists(check_clean):
+    func_clean_volreg(work_dir, phase_list, subj_num)
 
-    # blur data
-    blur_mult = 1.5
-    check_blur = os.path.join(work_dir, f"run-1_{phase_list[0]}_blur+tlrc.HEAD")
-    if not os.path.exists(check_blur):
-        func_blur(work_dir, subj_num, blur_mult)
+# blur data
+blur_mult = 1.5
+check_blur = os.path.join(work_dir, f"run-1_{phase_list[0]}_blur+tlrc.HEAD")
+if not os.path.exists(check_blur):
+    func_blur(work_dir, subj_num, blur_mult)
 
-    # make tissue masks
-    atropos_dict = {1: "CSF", 2: "GMc", 3: "WM", 4: "GMs"}
-    atropos_dir = os.path.join(atlas_dir, "priors_ACT")
-    check_tiss = os.path.join(work_dir, "final_mask_CSF_eroded+tlrc.HEAD")
-    if not os.path.exists(check_tiss):
-        func_tiss_masks(work_dir, subj_num, atropos_dict, atropos_dir)
+# make tissue masks
+atropos_dict = {1: "CSF", 2: "GMc", 3: "WM", 4: "GMs"}
+atropos_dir = os.path.join(atlas_dir, "priors_ACT")
+check_tiss = os.path.join(work_dir, "final_mask_CSF_eroded+tlrc.HEAD")
+if not os.path.exists(check_tiss):
+    func_tiss_masks(work_dir, subj_num, atropos_dict, atropos_dir)
 
-    # scale data
-    check_scale = os.path.join(work_dir, f"run-1_{phase_list[0]}_scale+tlrc.HEAD")
-    if not os.path.exists(check_scale):
-        func_scale(work_dir, phase_list, subj_num)
+# scale data
+check_scale = os.path.join(work_dir, f"run-1_{phase_list[0]}_scale+tlrc.HEAD")
+if not os.path.exists(check_scale):
+    func_scale(work_dir, phase_list, subj_num)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
 
 # %%
