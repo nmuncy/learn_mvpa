@@ -44,8 +44,7 @@ def flatten_list(list_2d):
 
 
 # %%
-def func_preproc(data_dir, work_dir, subj, sess, phase_list):
-
+def func_copy_data(subj, sess, work_dir, data_dir, phase_list):
     """
     Step 1: Copy data into work_dir
 
@@ -54,22 +53,6 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
     2) To account for different num of fmaps, will
         produce AP, PA fmap per run.
     """
-
-    # # For testing
-    # subj = "sub-008"
-    # sess = "ses-S1"
-    # phase_list = ["loc", "Study"]
-
-    # par_dir = "/scratch/madlab/nate_vCAT"
-    # data_dir = os.path.join(par_dir, "dset", subj, sess)
-    # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
-
-    # if not os.path.exists(work_dir):
-    #     os.makedirs(work_dir)
-
-    # %%
-    # Start
-    subj_num = subj.split("-")[1]
 
     # struct
     if not os.path.exists(os.path.join(work_dir, "struct+orig.HEAD")):
@@ -104,7 +87,6 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
                 h_copy = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
                 h_copy.wait()
 
-    # %%
     # fmap
     fmap_list = [
         x
@@ -124,7 +106,8 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
             h_copy = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
             h_copy.wait()
 
-    # %%
+
+def func_outliers(work_dir, phase_list, subj_num):
     """
     Step 2: Detect outliers voxels, blip correct
 
@@ -177,64 +160,74 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
                 """
                 func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}out", work_dir)
 
-    # %%
-    # Get all epi to be corrected w/same fmap
-    epiAll_list = [
-        x.split("+")[0]
-        for x in os.listdir(os.path.join(work_dir))
-        if fnmatch.fnmatch(x, "run-*HEAD")
-    ]
 
-    # new fmap correct
-    #   -f = same direction as epi run, will
-    #       become "Forward".
-    #   Runs several 10s of minutes, crashes
-    #       when subitted through func_sbatch.
-    if not os.path.exists(os.path.join(work_dir, "blip_WARP+orig.HEAD")):
+def func_fmap_corr(work_dir, subj_num, phase_list):
+
+    # create median datasets and masks
+    for h_dir in ["AP", "PA"]:
+        if not os.path.exists(
+            os.path.join(work_dir, f"tmp_med_masked_{h_dir}+orig.HEAD")
+        ):
+            h_cmd = f"""
+                cd {work_dir}
+
+                3dTstat \
+                    -median \
+                    -prefix tmp_med_{h_dir} \
+                    blip_{h_dir}+orig
+
+                3dAutomask \
+                    -apply_prefix tmp_med_masked_{h_dir} \
+                    tmp_med_{h_dir}+orig
+            """
+            func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}med", work_dir)
+
+    # compute midpoint bx AP, PA
+    #
+    # If acq = LR, fmap = RL:
+    #   base = LR, source = RL
+    #   -pmNAMES RL LR
+    #   unwarp LR with LR_WARP
+    if not os.path.exists(os.path.join(work_dir, "blip_warp_For_WARP+orig.HEAD")):
         h_cmd = f"""
-            module load afni-20.2.06
             cd {work_dir}
 
-            unWarpEPI.py \
-                -f blip_PA+orig \
-                -r blip_AP+orig \
-                -d '{",".join(epiAll_list)}' \
-                -a struct+orig \
-                -s fmap
-
-            3dcopy \
-                unWarpOutput_fmap/03_fmap_MidWarped_Forward_WARP.nii.gz \
-                blip_WARP
+            3dQwarp \
+                -plusminus \
+                -pmNAMES Rev For \
+                -pblur 0.05 0.05 \
+                -blur -1 -1 \
+                -noweight \
+                -minpatch 9 \
+                -source tmp_blip_med_masked_PA+orig \
+                -base tmp_blip_med_masked_AP+orig \
+                -prefix blip_warp
         """
-        print(h_cmd)
-        h_fmap = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-        h_fmap.wait()
+        func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}qwa", work_dir)
 
-    # %%
-    # copy fmap corrected files to work_dir
-    #   from unWarpOutput_foo
-    # 06* is corrected file
-    fmapCorr_list = [
-        x
-        for x in os.listdir(os.path.join(work_dir, "unWarpOutput_fmap"))
-        if fnmatch.fnmatch(x, "06*.nii.gz")
-    ]
+    # unwarp run data (de-distort), apply header
+    for phase in phase_list:
+        epi_list = func_epi_list(phase, work_dir)
+        for run in epi_list:
+            if not os.path.exists(os.path.join(work_dir, f"{run}_blip+orig.HEAD")):
+                h_cmd = f"""
+                    cd {work_dir}
 
-    for fmap_file in fmapCorr_list:
-        h_run = fmap_file.split("_")[2]
-        h_phase = fmap_file.split("_")[3]
-        out_file = os.path.join(work_dir, f"{h_run}_{h_phase}_blip")
-        if not os.path.exists(f"{out_file}+orig.HEAD"):
-            h_cmd = f"""
-                module load afni-20.2.06
-                3dcopy \
-                    {work_dir}/unWarpOutput_fmap/{fmap_file} \
-                    {out_file}
-            """
-            h_copy = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-            h_copy.wait()
+                    3dNwarpApply \
+                        -quintic \
+                        -nwarp blip_warp_For_WARP+orig \
+                        -source {run}+orig \
+                        -prefix {run}_blip
 
-    # %%
+                    3drefit \
+                        -atrcopy blip_AP+orig \
+                        IJK_TO_DICOM_REAL \
+                        {run}_blip+orig
+                """
+                func_sbatch(h_cmd, 1, 2, 4, f"{subj_num}nwar", work_dir)
+
+
+def func_volreg(work_dir, phase_list, blip_tog):
     """
     Step 3: Make volreg base
 
@@ -268,11 +261,12 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
 
     # all epi runs in experiment, same order as out_list!
     scan_dict = {}
+    h_str = "_blip+orig" if blip_tog == 1 else "+orig"
     for phase in phase_list:
         h_list = [
             x.split(".")[0]
             for x in os.listdir(work_dir)
-            if fnmatch.fnmatch(x, f"run-*{phase}_blip+orig.HEAD")
+            if fnmatch.fnmatch(x, f"run-*{phase}{h_str}.HEAD")
         ]
         h_list.sort()
         scan_dict[phase] = h_list
@@ -334,7 +328,8 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
         h_vrb = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
         h_vrb.wait()
 
-    # %%
+
+def func_register(atlas_dir, work_dir, subj_num, phase_list, blip_tog):
     """
     Step 4: Calc, Perfrom normalization
 
@@ -350,7 +345,6 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
     """
 
     # Calculate T1-EPI rigid, T1-Template diffeo
-    atlas_dir = "/home/data/madlab/atlases/vold2_mni"
 
     if not os.path.exists(os.path.join(work_dir, "struct_ns+tlrc.HEAD")):
         h_cmd = f"""
@@ -386,8 +380,19 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
         func_sbatch(h_cmd, 1, 4, 4, f"{subj_num}dif", work_dir)
 
     # %%
-    for h_run in scan_list:
+    scan_dict = {}
+    h_str = "_blip+orig" if blip_tog == 1 else "+orig"
+    for phase in phase_list:
+        h_list = [
+            x.split(".")[0]
+            for x in os.listdir(work_dir)
+            if fnmatch.fnmatch(x, f"run-*{phase}{h_str}.HEAD")
+        ]
+        h_list.sort()
+        scan_dict[phase] = h_list
+    scan_list = flatten_list(list(scan_dict.values()))
 
+    for h_run in scan_list:
         run = h_run.split("_blip")[0]
 
         # Calculate volreg for e/run
@@ -501,6 +506,9 @@ def func_preproc(data_dir, work_dir, subj, sess, phase_list):
                         -prefix {run}_volreg_clean
                 """
                 func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}cle", work_dir)
+
+
+def func_preproc(data_dir, work_dir, subj, sess, phase_list, blip_tog):
 
     # %%
     """
@@ -665,20 +673,38 @@ def func_argparser():
     parser.add_argument("h_sub", help="Subject ID")
     parser.add_argument("h_ses", help="Session")
     parser.add_argument("h_par", help="Parent Directory")
+    parser.add_argument("h_bt", help="Blip Toggle")
     parser.add_argument("h_phl", nargs="+", help="Phase List")
     return parser
 
 
 def main():
 
+    # # For testing
+    # subj = "sub-008"
+    # sess = "ses-S1"
+    # phase_list = ["loc", "Study"]
+
+    # par_dir = "/scratch/madlab/nate_vCAT"
+    # data_dir = os.path.join(par_dir, "dset", subj, sess)
+    # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
+
+    # if not os.path.exists(work_dir):
+    #     os.makedirs(work_dir)
+
+    atlas_dir = "/home/data/madlab/atlases/vold2_mni"
+
     args = func_argparser().parse_args()
     h_data_dir = os.path.join(args.h_par, "dset", args.h_sub, args.h_ses)
     h_work_dir = os.path.join(args.h_par, "derivatives", args.h_sub, args.h_ses)
 
+    subj = args.h_sub
+    subj_num = subj.split("-")[1]
+
     if not os.path.exists(h_work_dir):
         os.makedirs(h_work_dir)
 
-    func_preproc(h_data_dir, h_work_dir, args.h_sub, args.h_ses, args.h_phl)
+    func_preproc(h_data_dir, h_work_dir, args.h_sub, args.h_ses, args.h_phl, args.h_bt)
 
 
 if __name__ == "__main__":
