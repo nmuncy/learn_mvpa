@@ -390,31 +390,14 @@ def func_argparser():
 
 def main():
 
-    # For testing
-    subj = "sub-031"
-    sess = "ses-S1"
-    decon_type = "TENT"
-    decon_dict = {
-        "loc": [
-            "tf_loc_face.txt",
-            "tf_loc_num.txt",
-            "tf_loc_scene.txt",
-        ],
-        "Study": [
-            "tf_Study_fix.txt",
-            "tf_Study_con.txt",
-            "tf_Study_fbl.txt",
-        ],
-    }
-    phase = "loc"
-    deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
+    # capture passed args
+    args = func_argparser().parse_args()
+    subj = args.pars_subj
+    sess = args.pars_sess
+    decon_type = args.pars_type
+    deriv_dir = args.pars_dir
 
-    # args = func_argparser().parse_args()
-    # subj = args.pars_subj
-    # sess = args.pars_sess
-    # decon_type = args.pars_type
-    # deriv_dir = args.pars_dir
-
+    # set up
     work_dir = os.path.join(deriv_dir, subj, sess)
     sub_num = subj.split("-")[1]
 

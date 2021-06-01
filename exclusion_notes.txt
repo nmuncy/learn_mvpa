@@ -1,3 +1,2 @@
 sub-003: No EPI data
 sub-015: No behav data
-sub-018: Excessive movement - loc had 82 usable vols, Study 41
