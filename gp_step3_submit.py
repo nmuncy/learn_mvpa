@@ -66,7 +66,7 @@ def main():
             sess_list[0],
             f"{decon_list[1]}_single_stats_REML+tlrc.HEAD",
         )
-        if not os.path.exists(check_file1) or not os.path.exist(check_file2):
+        if not os.path.exists(check_file1) or not os.path.exists(check_file2):
             run_list.append(subj)
 
     # make batch list
