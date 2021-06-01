@@ -50,8 +50,32 @@ def main():
     subj_list = [x for x in os.listdir(deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
     subj_list.sort()
 
+    # determine which subjs to run
+    run_list = []
     for subj in subj_list:
-        # subj = subj_list[4]
+        decon_list = list(decon_dict.keys())
+        check_file1 = os.path.join(
+            deriv_dir,
+            subj,
+            sess_list[0],
+            f"{decon_list[0]}_single_stats_REML+tlrc.HEAD",
+        )
+        check_file2 = os.path.join(
+            deriv_dir,
+            subj,
+            sess_list[0],
+            f"{decon_list[1]}_single_stats_REML+tlrc.HEAD",
+        )
+        if not os.path.exists(check_file1) or not os.path.exist(check_file2):
+            run_list.append(subj)
+
+    # make batch list
+    if len(run_list) > 10:
+        batch_list = run_list[0:10]
+    else:
+        batch_list = run_list
+
+    for subj in batch_list:
         for sess in sess_list:
 
             h_out = os.path.join(out_dir, f"out_{subj}_{sess}.txt")
@@ -63,28 +87,20 @@ def main():
             ) as outfile:
                 json.dump(decon_dict, outfile)
 
-            # quick patch for resubmitting jobs
-            file1 = os.path.join(
-                deriv_dir, subj, sess, "loc_single_stats_REML+tlrc.HEAD"
+            sbatch_job = f"""
+                sbatch \
+                -J "GP3{subj.split("-")[1]}" -t 30:00:00 --mem=4000 --ntasks-per-node=1 \
+                -p IB_44C_512G  -o {h_out} -e {h_err} \
+                --account iacc_madlab --qos pq_madlab \
+                --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
+                python {code_dir}/gp_step3_decon.py {subj} {sess} {decon_type} {deriv_dir}"
+            """
+            sbatch_submit = subprocess.Popen(
+                sbatch_job, shell=True, stdout=subprocess.PIPE
             )
-            file2 = os.path.join(
-                deriv_dir, subj, sess, "Study_single_stats_REML+tlrc.HEAD"
-            )
-            if not os.path.exists(file1) or not os.path.exists(file2):
-                sbatch_job = f"""
-                    sbatch \
-                    -J "GP3{subj.split("-")[1]}" -t 30:00:00 --mem=4000 --ntasks-per-node=1 \
-                    -p IB_44C_512G  -o {h_out} -e {h_err} \
-                    --account iacc_madlab --qos pq_madlab \
-                    --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
-                    python {code_dir}/gp_step3_decon.py {subj} {sess} {decon_type} {deriv_dir}"
-                """
-                sbatch_submit = subprocess.Popen(
-                    sbatch_job, shell=True, stdout=subprocess.PIPE
-                )
-                job_id = sbatch_submit.communicate()[0]
-                print(job_id.decode("utf-8"))
-                time.sleep(1)
+            job_id = sbatch_submit.communicate()[0]
+            print(job_id.decode("utf-8"))
+            time.sleep(1)
 
 
 if __name__ == "__main__":

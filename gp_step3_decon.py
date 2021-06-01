@@ -30,7 +30,7 @@ from gp_step0_dcm2nii import func_sbatch
 
 # %%
 def func_write_decon(
-    run_files, tf_dict, cen_file, h_phase, h_type, h_desc, work_dir, dmn_list, drv_list
+    run_list, tf_dict, cen_file, phase, decon_type, desc, work_dir, dmn_list, drv_list
 ):
     """
     Notes: This function generates a 3dDeconvolve command.
@@ -38,11 +38,6 @@ def func_write_decon(
         TENT does not currently include duration.
 
     """
-
-    # build epi list for -input
-    in_files = []
-    for fil in run_files:
-        in_files.append(f"{fil.split('.')[0]}")
 
     # build censor arguments
     reg_base = []
@@ -55,7 +50,7 @@ def func_write_decon(
     # determine tr
     h_cmd = f"""
         module load afni-20.2.06
-        3dinfo -tr {work_dir}/{run_files[0]}
+        3dinfo -tr {work_dir}/{run_list[0]}
     """
     h_tr = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     h_len_tr = h_tr.communicate()[0]
@@ -70,22 +65,22 @@ def func_write_decon(
 
     reg_beh = []
     for c_beh, beh in enumerate(tf_dict):
-        if h_type == "dmBLOCK" or h_type == "GAM" or h_type == "2GAM":
+        if decon_type == "dmBLOCK" or decon_type == "GAM" or decon_type == "2GAM":
 
             # add stim_time info, order is
             #   -stim_times 1 tf_beh.txt basisFunction
             reg_beh.append("-stim_times_AM1")
-            reg_beh.append(c_beh + 1)
+            reg_beh.append(f"{c_beh + 1}")
             reg_beh.append(f"timing_files/{tf_dict[beh]}")
-            reg_beh.append(switch_dict[h_type])
+            reg_beh.append(switch_dict[decon_type])
 
             # add stim_label info, order is
             #   -stim_label 1 beh
             reg_beh.append("-stim_label")
-            reg_beh.append(c_beh + 1)
+            reg_beh.append(f"{c_beh + 1}")
             reg_beh.append(beh)
 
-        elif h_type == "TENT":
+        elif decon_type == "TENT":
 
             # extract duration, account for no behavior in 1st run
             tmp_str = tf_dict[beh].replace("tf", "dur")
@@ -104,24 +99,24 @@ def func_write_decon(
 
             # stim_time
             reg_beh.append("-stim_times")
-            reg_beh.append({c_beh + 1})
+            reg_beh.append(f"{c_beh + 1}")
             reg_beh.append(f"timing_files/{tf_dict[beh]}")
             reg_beh.append(f"""'TENT({",".join(tent_args)})'""")
 
             # stim_label
             reg_beh.append("-stim_label")
-            reg_beh.append({c_beh + 1})
+            reg_beh.append(f"{c_beh + 1}")
             reg_beh.append(beh)
 
     # set output str
-    h_out = f"{h_phase}_{h_desc}"
+    h_out = f"{phase}_{desc}"
 
     # build full decon command
     cmd_decon = f"""
         3dDeconvolve \\
             -x1D_stop \\
             -GOFORIT \\
-            -input {" ".join(in_files)} \\
+            -input {" ".join(run_list)} \\
             -censor {cen_file} \\
             {" ".join(reg_base)} \\
             -polort A \\
@@ -141,7 +136,6 @@ def func_write_decon(
     return cmd_decon
 
 
-# %%
 def func_motion(work_dir, phase, sub_num):
 
     """
@@ -211,11 +205,11 @@ def func_motion(work_dir, phase, sub_num):
                 -censor_motion 0.3 \
                 motion_{phase}
 
-            cat out.cen.run-*{phase}.1D > outcount_censor_{phase}.1D
+            cat out.cen.run-*{phase}.1D > outcount_{phase}_censor.1D
 
             1deval \
                 -a motion_{phase}_censor.1D \
-                -b outcount_censor_{phase}.1D \
+                -b outcount_{phase}_censor.1D \
                 -expr "a*b" > censor_{phase}_combined.1D
         """
         h_mot = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
@@ -232,7 +226,7 @@ def func_decon(work_dir, phase, time_files, decon_type, sub_num):
 
     # make list of pre-processed epi files
     run_list = [
-        x
+        x.split(".")[0]
         for x in os.listdir(work_dir)
         if fnmatch.fnmatch(x, f"*{phase}_scale+tlrc.HEAD")
     ]
@@ -253,7 +247,7 @@ def func_decon(work_dir, phase, time_files, decon_type, sub_num):
 
     # write decon script for each phase of session
     #   desc = "single" is a place holder for when a session
-    #   only has a single decon phase
+    #   only has a single deconvolution
     if type(time_files) == list:
 
         desc = "single"
@@ -268,7 +262,7 @@ def func_decon(work_dir, phase, time_files, decon_type, sub_num):
         decon_script = os.path.join(work_dir, f"decon_{phase}_{desc}.sh")
         with open(decon_script, "w") as script:
             script.write(
-                func_decon(
+                func_write_decon(
                     run_list,
                     tf_dict,
                     f"censor_{phase}_combined.1D",
@@ -292,7 +286,7 @@ def func_decon(work_dir, phase, time_files, decon_type, sub_num):
             decon_script = os.path.join(work_dir, f"decon_{phase}_{desc}.sh")
             with open(decon_script, "w") as script:
                 script.write(
-                    func_decon(
+                    func_write_decon(
                         run_list,
                         tf_dict,
                         f"censor_{phase}_combined.1D",
@@ -313,6 +307,7 @@ def func_decon(work_dir, phase, time_files, decon_type, sub_num):
     # run decon script to generate matrices
     for dcn_script in script_list:
         h_cmd = f"""
+            module load afni-20.2.06
             cd {work_dir}
             source {os.path.join(work_dir, dcn_script)}
         """
@@ -382,6 +377,7 @@ def func_reml(work_dir, phase, sub_num, time_files):
                 func_sbatch(h_cmd, 10, 4, 6, f"{sub_num}rml", work_dir)
 
 
+# %%
 # receive arguments
 def func_argparser():
     parser = ArgumentParser("Receive Bash args from wrapper")
@@ -394,23 +390,30 @@ def func_argparser():
 
 def main():
 
-    # # For testing
-    # subj = "sub-031"
-    # sess = "ses-S1"
-    # phase = "Study"
-    # decon_type = "TENT"
-    # sub_num = subj.split("-")[1]
-    # par_dir = "/scratch/madlab/nate_vCAT"
-    # work_dir = os.path.join(par_dir, "derivatives", subj, sess)
-    # # with open(os.path.join(work_dir, "decon_dict.json")) as json_file:
-    # #     decon_dict = json.load(json_file)
-    # time_files = decon_dict[phase]
+    # For testing
+    subj = "sub-031"
+    sess = "ses-S1"
+    decon_type = "TENT"
+    decon_dict = {
+        "loc": [
+            "tf_loc_face.txt",
+            "tf_loc_num.txt",
+            "tf_loc_scene.txt",
+        ],
+        "Study": [
+            "tf_Study_fix.txt",
+            "tf_Study_con.txt",
+            "tf_Study_fbl.txt",
+        ],
+    }
+    phase = "loc"
+    deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
 
-    args = func_argparser().parse_args()
-    subj = args.pars_subj
-    sess = args.pars_sess
-    decon_type = args.pars_type
-    deriv_dir = args.pars_dir
+    # args = func_argparser().parse_args()
+    # subj = args.pars_subj
+    # sess = args.pars_sess
+    # decon_type = args.pars_type
+    # deriv_dir = args.pars_dir
 
     work_dir = os.path.join(deriv_dir, subj, sess)
     sub_num = subj.split("-")[1]
@@ -440,3 +443,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# %%
