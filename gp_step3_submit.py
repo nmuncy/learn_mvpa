@@ -23,16 +23,8 @@ work_dir = "/scratch/madlab/nate_vCAT"
 sess_list = ["ses-S1"]
 decon_type = "TENT"
 decon_dict = {
-    "loc": [
-        "tf_loc_face.txt",
-        "tf_loc_num.txt",
-        "tf_loc_scene.txt",
-    ],
-    "Study": [
-        "tf_Study_fix.txt",
-        "tf_Study_con.txt",
-        "tf_Study_fbl.txt",
-    ],
+    "loc": ["tf_loc_face.txt", "tf_loc_num.txt", "tf_loc_scene.txt",],
+    "Study": ["tf_Study_fix.txt", "tf_Study_con.txt", "tf_Study_fbl.txt",],
 }
 
 
@@ -89,7 +81,7 @@ def main():
 
             sbatch_job = f"""
                 sbatch \
-                -J "GP3{subj.split("-")[1]}" -t 40:00:00 --mem=4000 --ntasks-per-node=1 \
+                -J "GP3{subj.split("-")[1]}" -t 50:00:00 --mem=4000 --ntasks-per-node=1 \
                 -p IB_44C_512G  -o {h_out} -e {h_err} \
                 --account iacc_madlab --qos pq_madlab \
                 --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \

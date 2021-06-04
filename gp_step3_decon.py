@@ -360,7 +360,7 @@ def func_reml(work_dir, phase, sub_num, time_files):
                     -dsort {phase}_WMe_rall+tlrc \
                     -GOFORIT
             """
-            func_sbatch(h_cmd, 20, 4, 6, f"{sub_num}rml", work_dir)
+            func_sbatch(h_cmd, 25, 4, 6, f"{sub_num}rml", work_dir)
 
     elif type(time_files) == dict:
         for desc in time_files:
@@ -374,7 +374,7 @@ def func_reml(work_dir, phase, sub_num, time_files):
                         -dsort {phase}_WMe_rall+tlrc \
                         -GOFORIT
                 """
-                func_sbatch(h_cmd, 20, 4, 6, f"{sub_num}rml", work_dir)
+                func_sbatch(h_cmd, 25, 4, 6, f"{sub_num}rml", work_dir)
 
 
 # %%
