@@ -23,8 +23,8 @@ work_dir = "/scratch/madlab/nate_vCAT"
 sess_list = ["ses-S1"]
 decon_type = "TENT"
 decon_dict = {
-    "loc": ["tf_loc_face.txt", "tf_loc_num.txt", "tf_loc_scene.txt",],
-    "Study": ["tf_Study_fix.txt", "tf_Study_con.txt", "tf_Study_fbl.txt",],
+    "loc": ["tf_loc_face.txt", "tf_loc_num.txt", "tf_loc_scene.txt"],
+    "Study": ["tf_Study_fix.txt", "tf_Study_con.txt", "tf_Study_fbl.txt"],
 }
 
 
