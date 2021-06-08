@@ -13,7 +13,7 @@ import numpy as np
 from gp_step0_dcm2nii import func_sbatch
 
 
-def func_lenRun(lrn_subj_dir, lrn_phase):
+def func_lenRun(subj_dir, phase):
 
     """
     Returns a dictionary that contains TR length,
@@ -24,7 +24,7 @@ def func_lenRun(lrn_subj_dir, lrn_phase):
     # determine number of volumes
     h_cmd = f"""
         module load afni-20.2.06
-        3dinfo -ntimes {lrn_subj_dir}/run-1_{lrn_phase}_scale+tlrc
+        3dinfo -ntimes {subj_dir}/run-1_{phase}_scale+tlrc
     """
     h_nvol = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     num_nvol = int(h_nvol.communicate()[0].decode("utf-8").strip())
@@ -32,7 +32,7 @@ def func_lenRun(lrn_subj_dir, lrn_phase):
     # determine TR len
     h_cmd = f"""
         module load afni-20.2.06
-        3dinfo -tr {lrn_subj_dir}/run-1_{lrn_phase}_scale+tlrc
+        3dinfo -tr {subj_dir}/run-1_{phase}_scale+tlrc
     """
     h_tr = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     len_tr = float(h_tr.communicate()[0].decode("utf-8").strip())
@@ -41,8 +41,8 @@ def func_lenRun(lrn_subj_dir, lrn_phase):
     num_runs = len(
         [
             x
-            for x in os.listdir(lrn_subj_dir)
-            if fnmatch.fnmatch(x, f"*{lrn_phase}*scale+tlrc.HEAD")
+            for x in os.listdir(subj_dir)
+            if fnmatch.fnmatch(x, f"*{phase}*scale+tlrc.HEAD")
         ]
     )
 
@@ -59,11 +59,11 @@ def func_lenRun(lrn_subj_dir, lrn_phase):
 
 
 def func_timing(
-    tim_beh_list,
-    tim_hdr_dict,
-    tim_subj_dir,
-    tim_phase,
-    tim_dcn_str,
+    beh_list,
+    hdr_dict,
+    subj_dir,
+    phase,
+    dcn_str,
 ):
     """
     Mines timing files (tf_phase_foo.txt) to construct
@@ -75,11 +75,13 @@ def func_timing(
     """
 
     # convert timing files to 1D in volume time
-    for beh in tim_beh_list:
+    timing_dir = os.path.join(subj_dir, "timing_files")
+
+    for beh in beh_list:
 
         # determine behavior duration, get 1st number in column 0
         data_raw = pd.read_csv(
-            os.path.join(tim_subj_dir, f"dur_{tim_phase}_{beh}.txt"), header=None
+            os.path.join(timing_dir, f"dur_{phase}_{beh}.txt"), header=None
         )
         data_clean = data_raw[0].str.split("\t", expand=True)
         for value in data_clean[0]:
@@ -91,27 +93,28 @@ def func_timing(
         h_cmd = f"""
             module load afni-20.2.06
             timing_tool.py \
-                -timing {tim_subj_dir}/tf_{tim_phase}_{beh}.txt \
-                -tr {tim_hdr_dict["LenTR"]} \
+                -timing {timing_dir}/tf_{phase}_{beh}.txt \
+                -tr {hdr_dict["LenTR"]} \
                 -stim_dur {beh_dur} \
-                -run_len {tim_hdr_dict["LenRun"]} \
+                -run_len {hdr_dict["LenRun"]} \
                 -timing_to_1D \
-                {tim_subj_dir}/tmp_tf_{tim_phase}_{beh}.1D
+                {subj_dir}/tmp_tf_{phase}_{beh}.1D
         """
         h_spl = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
         print(h_spl.communicate())
+        h_spl.wait()
 
     # make attribute df - combine columns
     tf_list = []
-    for beh in tim_beh_list:
-        h_tf = f"tmp_tf_{tim_phase}_{beh}.1D"
-        if os.path.exists(os.path.join(tim_subj_dir, h_tf)):
+    for beh in beh_list:
+        h_tf = f"tmp_tf_{phase}_{beh}.1D"
+        if os.path.exists(os.path.join(subj_dir, h_tf)):
             tf_list.append(h_tf)
 
     df_att = pd.concat(
         [
             pd.read_csv(
-                os.path.join(tim_subj_dir, item),
+                os.path.join(subj_dir, item),
                 names=[item.split("_")[3].split(".")[0]],
             )
             for item in tf_list
@@ -123,7 +126,7 @@ def func_timing(
     # new attribute (att) column, fill with column name,
     #   remove rows/vols w/multiple behaviors, fill
     #   NaN with "base"
-    for beh in tim_beh_list:
+    for beh in beh_list:
         df_att.loc[df_att[beh] == 1, "att"] = beh
 
     for row, col in enumerate(df_att["att"]):
@@ -133,21 +136,21 @@ def func_timing(
 
     # add category (cat) column for afni, 0 = base
     #   update - censor 0 via 9999
-    if "base" not in tim_beh_list:
-        tim_beh_list.insert(0, "base")
-    for cat, beh in enumerate(tim_beh_list):
+    if "base" not in beh_list:
+        beh_list.insert(0, "base")
+    for cat, beh in enumerate(beh_list):
         df_att.loc[df_att["att"] == beh, "cat"] = cat
     df_att["cat"] = df_att["cat"].replace([0], 9999)
     df_att["cat"] = df_att["cat"].astype(int)
 
     # write categories, and matrix (for checking)
-    h_out = os.path.join(tim_subj_dir, f"MVPA_{tim_dcn_str}_categories.txt")
+    h_out = os.path.join(subj_dir, f"MVPA_{dcn_str}_categories.txt")
     np.savetxt(h_out, df_att["cat"].values, fmt="%s", delimiter=" ")
-    h_df = os.path.join(tim_subj_dir, f"MVPA_{tim_dcn_str}_matrix.txt")
+    h_df = os.path.join(subj_dir, f"MVPA_{dcn_str}_matrix.txt")
     np.savetxt(h_df, df_att.values, fmt="%s", delimiter=" ")
 
 
-def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
+def func_detrend(subj_dir, dcn_str, beh_list, hdr_dict):
 
     """
     Extracts non-baseline sub-bricks from decon_cbucket_REML+tlrc to
@@ -159,18 +162,20 @@ def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
     #   then look for column label in task_dict
     #   to get a brick_list of only effects of interest
     brick_list = []
-    with open(os.path.join(dtr_subj_dir, f"X.{dtr_dcn_str}.xmat.1D")) as f:
+    with open(os.path.join(subj_dir, f"X.{dcn_str}.xmat.1D")) as f:
         h_file = f.readlines()
         for line in h_file:
             if line.__contains__("ColumnLabels"):
                 col_list = line.split('"')[1].replace(" ", "").split(";")
                 for i, j in enumerate(col_list):
-                    if j.split("#")[0] in dtr_beh_list:
+                    if j.split("#")[0] in beh_list:
                         brick_list.append(f"{str(i)}")
 
     # determine correct number of sub-bricks
     #   decon adds an extra for model
-    h_cmd = f"module load afni-20.2.06 \n 3dinfo -nv {dtr_subj_dir}/{dtr_dcn_str}_cbucket_REML+tlrc"
+    h_cmd = (
+        f"module load afni-20.2.06 \n 3dinfo -nv {subj_dir}/{dcn_str}_cbucket_REML+tlrc"
+    )
     h_len = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     len_wrong = h_len.communicate()[0].decode("utf-8").strip()
     len_right = int(len_wrong) - 2
@@ -179,13 +184,13 @@ def func_detrend(dtr_subj_dir, dtr_dcn_str, dtr_beh_list, dtr_hdr_dict):
     #   only contains tent data, extra sub-bricks
     #   are left behind
     h_cmd = f"""
-        cd {dtr_subj_dir}
-        3dTcat -prefix tmp_{dtr_dcn_str}_cbucket -tr {dtr_hdr_dict["LenTR"]} "{dtr_dcn_str}_cbucket_REML+tlrc[0..{len_right}]"
-        3dSynthesize -prefix MVPA_{dtr_dcn_str} -matrix X.{dtr_dcn_str}.xmat.1D \
-            -cbucket tmp_{dtr_dcn_str}_cbucket+tlrc -select {" ".join(brick_list)} -cenfill nbhr
+        cd {subj_dir}
+        3dTcat -prefix tmp_{dcn_str}_cbucket -tr {hdr_dict["LenTR"]} "{dcn_str}_cbucket_REML+tlrc[0..{len_right}]"
+        3dSynthesize -prefix MVPA_{dcn_str} -matrix X.{dcn_str}.xmat.1D \
+            -cbucket tmp_{dcn_str}_cbucket+tlrc -select {" ".join(brick_list)} -cenfill nbhr
     """
-    subj_num = dtr_subj_dir.split("-")[1].split("/")[0]
-    func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}all", dtr_subj_dir)
+    subj_num = subj_dir.split("-")[1].split("/")[0]
+    func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}all", subj_dir)
 
 
 def main():
@@ -203,7 +208,7 @@ def main():
     # work_dir = "/scratch/madlab/nate_vCAT/derivatives"
     # subj = "sub-005"
     # sess = "ses-S1"
-    # task_dict = {"loc": ["face", "scene"], "Study": {"BE": ["Bfe", "Bse"]}}
+    # task_dict = {"loc": ["face", "scene"], "Study": ["fblf", "fbls"]}
     # phase = "loc"
     # hdr_dict = func_lenRun(subj_dir, phase)
 
@@ -228,7 +233,7 @@ def main():
             )
 
             # set out str
-            dcn_str = f"{phase}_decon"
+            dcn_str = f"{phase}_single"
 
             # make cat files
             if not os.path.exists(

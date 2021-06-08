@@ -81,11 +81,20 @@ def main():
 
             sbatch_job = f"""
                 sbatch \
-                -J "GP3{subj.split("-")[1]}" -t 50:00:00 --mem=4000 --ntasks-per-node=1 \
-                -p IB_44C_512G  -o {h_out} -e {h_err} \
-                --account iacc_madlab --qos pq_madlab \
-                --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
-                python {code_dir}/gp_step3_decon.py {subj} {sess} {decon_type} {deriv_dir}"
+                    -J "GP3{subj.split("-")[1]}" \
+                    -t 50:00:00 \
+                    --mem=4000 \
+                    --ntasks-per-node=1 \
+                    -p IB_44C_512G  \
+                    -o {h_out} -e {h_err} \
+                    --account iacc_madlab \
+                    --qos pq_madlab \
+                    --wrap="module load python-3.7.0-gcc-8.2.0-joh2xyk \n \
+                    python {code_dir}/gp_step3_decon.py \
+                        {subj} \
+                        {sess} \
+                        {decon_type} \
+                        {deriv_dir}"
             """
             sbatch_submit = subprocess.Popen(
                 sbatch_job, shell=True, stdout=subprocess.PIPE
