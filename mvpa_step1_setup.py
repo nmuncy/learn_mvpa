@@ -210,11 +210,11 @@ def main():
     Output will be titled MVPA_foo
     """
 
-    # For Testing
-    work_dir = "/scratch/madlab/nate_vCAT/derivatives"
-    subj = "sub-005"
-    sess = "ses-S1"
-    train_dict = {"loc": ["face", "scene"]}
+    # # For Testing
+    # work_dir = "/scratch/madlab/nate_vCAT/derivatives"
+    # subj = "sub-005"
+    # sess = "ses-S1"
+    # train_dict = {"loc": ["face", "scene"]}
 
     # Receive args
     subj = str(sys.argv[1])

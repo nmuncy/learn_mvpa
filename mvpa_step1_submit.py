@@ -50,7 +50,7 @@ def main():
             sbatch \
                 -J "MVPA1{subj.split("-")[1]}" \
                 -t 2:00:00 \
-                --mem=1000 \
+                --mem=4000 \
                 --ntasks-per-node=1 \
                 -p IB_44C_512G  \
                 -o {h_out} -e {h_err} \
