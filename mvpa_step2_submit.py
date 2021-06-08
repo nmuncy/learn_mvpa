@@ -16,8 +16,10 @@ def main():
 
     # set up
     sess_str = "ses-S1"
-    train_str = "loc_decon"
-    deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
+    train_str = "MVPA_loc_single"
+    parent_dir = "/scratch/madlab/nate_vCAT"
+    deriv_dir = os.path.join(parent_dir, "derivatives")
+    group_dir = os.path.join(parent_dir, "analyses")
     code_dir = "/home/nmuncy/compute/learn_mvpa"
 
     # submit job
@@ -29,6 +31,8 @@ def main():
 
     # submit for e/subj
     subj_list = [x for x in os.listdir(deriv_dir) if fnmatch.fnmatch(x, "sub-*")]
+    subj_list.sort()
+
     for subj in subj_list:
 
         # Set stdout/err file
@@ -36,16 +40,22 @@ def main():
         h_err = os.path.join(out_dir, f"err_{subj}_train.txt")
 
         # submit command
-        if not os.path.exists(
-            os.path.join(deriv_dir, subj, sess_str, "MVPA_train+tlrc.HEAD")
-        ):
+        subj_dir = os.path.join(deriv_dir, subj, sess_str)
+        if not os.path.exists(os.path.join(subj_dir, "MVPA_train+tlrc.HEAD")):
             sbatch_job = f"""
                 sbatch \
-                -J "MVPA2trn" -t 6:00:00 --mem=1000 --ntasks-per-node=1 \
-                -p IB_44C_512G  -o {h_out} -e {h_err} \
-                --account iacc_madlab --qos pq_madlab \
-                --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step2_train.py \
-                    {subj} {sess_str} {train_str} {deriv_dir}"
+                    -J "MVPA2{subj.split("-")[-1]}" \
+                    -t 1:00:00 \
+                    --mem=4000 \
+                    --ntasks-per-node=1 \
+                    -p IB_44C_512G \
+                    -o {h_out} -e {h_err} \
+                    --account iacc_madlab \
+                    --qos pq_madlab \
+                    --wrap="~/miniconda3/bin/python {code_dir}/mvpa_step2_train.py \
+                        {subj_dir} \
+                        {train_str} \
+                        {group_dir}"
             """
             sbatch_submit = subprocess.Popen(
                 sbatch_job, shell=True, stdout=subprocess.PIPE

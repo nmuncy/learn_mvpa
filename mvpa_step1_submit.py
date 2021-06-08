@@ -24,7 +24,6 @@ train_dict = {"loc": ["face", "scene"]}
 # %%
 def main():
 
-    """ Step 2: Submit Jobs"""
     current_time = datetime.now()
     out_dir = os.path.join(
         deriv_dir, f'Slurm_out/MVPA1_{current_time.strftime("%H%M_%d-%m-%y")}'

@@ -56,7 +56,8 @@ def func_test(subj, test_list, subj_dir):
         if not os.path.exists(os.path.join(subj_dir, f"MVPA_pred_{test}.1D")):
             h_cmd = f"""
                 cd {subj_dir}
-                3dsvm -testvol MVPA_{test}_test+tlrc \
+                3dsvm \
+                    -testvol MVPA_{test}_test+tlrc \
                     -model MVPA_train+tlrc \
                     -testlabels MVPA_{test}_cat_updated.txt \
                     -predictions MVPA_pred_{test} \
