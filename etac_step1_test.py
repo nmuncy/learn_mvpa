@@ -108,6 +108,8 @@ def func_tentAvg(subj, sess, phase, deriv_dir):
     #   order to do a F+S > Num comparison
     comp_dict = {}
     comp_dict["num"] = beh_dict["num"]
+    comp_dict["face"] = beh_dict["face"]
+    comp_dict["scene"] = beh_dict["scene"]
     comp_dict["FS"] = beh_dict["face"] + beh_dict["scene"]
 
     # make mean of tents for each comp
@@ -128,17 +130,19 @@ def func_tentAvg(subj, sess, phase, deriv_dir):
 
 
 # %%
-def func_etac(subj_list, out_dir, deriv_dir, sess):
+def func_etac(subj_list, out_dir, deriv_dir, sess, strA, strB, phase):
 
     # set up ETAC script
     list_A = []
     list_B = []
     for subj in subj_list:
+        list_A.append(subj)
         list_A.append(
-            f"{subj} {os.path.join(deriv_dir, subj, sess, 'loc_tentAvg_FS+tlrc')}"
+            os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_{strA}+tlrc")
         )
+        list_B.append(subj)
         list_B.append(
-            f"{subj} {os.path.join(deriv_dir, subj, sess, 'loc_tentAvg_num+tlrc')}"
+            os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_{strB}+tlrc")
         )
 
     h_cmd = f"""
@@ -149,29 +153,32 @@ def func_etac(subj_list, out_dir, deriv_dir, sess):
         3dttest++ \\
             -paired \\
             -mask Group_GM_intersect_mask+tlrc \\
-            -prefix loc_FS-N \\
-            -prefix_clustsim loc_FS-N_clustsim \\
+            -prefix {phase}_{strA}-{strB} \\
+            -prefix_clustsim {phase}_{strA}-{strB}_clustsim \\
             -ETAC \\
-            -ETAC_opt name=NN1:NN1:2sid:pthr=0.01,0.005,0.001 \\
+            -ETAC_opt NN=2:sid=2:hpow=2:pthr=0.01,0.005,0.001:name=NN2 \\
             -setA A {" ".join(list_A)} \\
             -setB B {" ".join(list_B)}
 
-        3dcopy loc_FS-N_clustsim.NN1.ETACmask.global.2sid.5perc.nii.gz FINAL_loc_FS-N+tlrc
+        3dcopy {phase}_{strA}-{strB}_clustsim.NN2.ETACmask.global.2sid.5perc.nii.gz \
+            FINAL_{phase}_{strA}-{strB}+tlrc
     """
     func_sbatch(h_cmd, 40, 6, 10, "vCATetac", out_dir)
 
 
-def func_ttest(subj_list, out_dir, deriv_dir, sess):
+def func_ttest(subj_list, out_dir, deriv_dir, sess, strA, strB, phase):
 
     # set up ETAC script
     list_A = []
     list_B = []
     for subj in subj_list:
+        list_A.append(subj)
         list_A.append(
-            f"{subj} {os.path.join(deriv_dir, subj, sess, 'loc_tentAvg_FS+tlrc')}"
+            os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_{strA}+tlrc")
         )
+        list_B.append(subj)
         list_B.append(
-            f"{subj} {os.path.join(deriv_dir, subj, sess, 'loc_tentAvg_num+tlrc')}"
+            os.path.join(deriv_dir, subj, sess, f"{phase}_tentAvg_{strB}+tlrc")
         )
 
     h_cmd = f"""
@@ -181,7 +188,7 @@ def func_ttest(subj_list, out_dir, deriv_dir, sess):
         3dttest++ \\
             -paired \\
             -mask Group_GM_intersect_mask+tlrc \\
-            -prefix loc_FS-N_tt \\
+            -prefix {phase}_{strA}-{strB}_tt \\
             -setA A {" ".join(list_A)} \\
             -setB B {" ".join(list_B)}
     """
@@ -220,13 +227,17 @@ def main():
         if not os.path.exists(file1) or not os.path.exists(file2):
             func_tentAvg(subj, sess, phase, deriv_dir)
 
-    # run etac
-    if not os.path.exists(os.path.join(out_dir, "FINAL_loc_FS-N+tlrc.HEAD")):
-        func_etac(subj_list, out_dir, deriv_dir, sess)
+    # run etac - face vs scene
+    if not os.path.exists(os.path.join(out_dir, "FINAL_loc_face-scene+tlrc.HEAD")):
+        func_etac(subj_list, out_dir, deriv_dir, sess, "face", "scene", phase)
 
-    # run ttest
-    if not os.path.exists(os.path.join(out_dir, "FINAL_loc_FS-N_tt+tlrc.HEAD")):
-        func_ttest(subj_list, out_dir, deriv_dir, sess)
+    # face + scene vs num
+    if not os.path.exists(os.path.join(out_dir, "FINAL_loc_FS-num+tlrc.HEAD")):
+        func_etac(subj_list, out_dir, deriv_dir, sess, "FS", "num", phase)
+
+    # run ttest - face vs scene
+    if not os.path.exists(os.path.join(out_dir, "FINAL_loc_face-scene_tt+tlrc.HEAD")):
+        func_ttest(subj_list, out_dir, deriv_dir, sess, "face", "scene", phase)
 
 
 if __name__ == "__main__":
