@@ -1,13 +1,7 @@
 """
 Notes
 
-Updated to train on subjects individually.
-Group training yielded:
-    error = 37.6%
-    recall = 25.9% (hit/(hit+miss))
-    precision = 92.5% (hit/fa)
-
-    Individual training yields better recall, and lower error.
+SVM train on each subject.
 """
 
 # %%

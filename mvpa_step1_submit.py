@@ -1,7 +1,13 @@
 """
-Notes
+Notes:
+    train_dict should contain phase, behaviors to train on:
+        phase: [beh1, beh2]
+    which should correspond to timing files: tf_phase_beh1.txt
 
+    phase could also be decon identifier (foo_bar_stats_REML+tlrc)
+        rather than phase_single_stats_REML+tlrc
 
+        job script assumes phase_single atm.
 """
 
 # %%
