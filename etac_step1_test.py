@@ -156,7 +156,7 @@ def func_etac(subj_list, out_dir, deriv_dir, sess, strA, strB, phase):
             -prefix {phase}_{strA}-{strB} \\
             -prefix_clustsim {phase}_{strA}-{strB}_clustsim \\
             -ETAC \\
-            -ETAC_opt NN=2:sid=2:hpow=2:pthr=0.01,0.005,0.001:name=NN2 \\
+            -ETAC_opt NN=2:sid=2:hpow=0:pthr=0.01,0.005,0.001:name=NN2 \\
             -setA A {" ".join(list_A)} \\
             -setB B {" ".join(list_B)}
 
