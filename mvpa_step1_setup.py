@@ -10,9 +10,9 @@ import fnmatch
 import subprocess
 import pandas as pd
 import numpy as np
-from gp_step0_dcm2nii import func_sbatch
 
 
+# %%
 def func_lenRun(subj_dir, phase):
 
     """
@@ -71,7 +71,7 @@ def func_timing(
         (b) matrix, used for verification.
 
     Files have one row per volume of phase, and category ints
-        are 1-indexed from task_dict behaviors (0 = baseline)
+        are 1-indexed from train_dict behaviors (0 = baseline)
     """
 
     # convert timing files to 1D in volume time
@@ -80,14 +80,10 @@ def func_timing(
     for beh in beh_list:
 
         # determine behavior duration, get 1st number in column 0
-        data_raw = pd.read_csv(
+        df_dur = pd.read_csv(
             os.path.join(timing_dir, f"dur_{phase}_{beh}.txt"), header=None
         )
-        data_clean = data_raw[0].str.split("\t", expand=True)
-        for value in data_clean[0]:
-            if "*" not in value:
-                beh_dur = value
-                break
+        beh_dur = df_dur[0][1]
 
         # make 1D file per run
         h_cmd = f"""
@@ -101,7 +97,6 @@ def func_timing(
                 {subj_dir}/tmp_tf_{phase}_{beh}.1D
         """
         h_spl = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
-        print(h_spl.communicate())
         h_spl.wait()
 
     # make attribute df - combine columns
@@ -159,8 +154,10 @@ def func_detrend(subj_dir, dcn_str, beh_list, hdr_dict):
 
     # get relevant column numbers
     #   read design matrix, find column labels,
-    #   then look for column label in task_dict
+    #   then look for column label in train_dict
     #   to get a brick_list of only effects of interest
+    #
+    #   will produce appropriate sub-bricks for cbucket file
     brick_list = []
     with open(os.path.join(subj_dir, f"X.{dcn_str}.xmat.1D")) as f:
         h_file = f.readlines()
@@ -173,108 +170,91 @@ def func_detrend(subj_dir, dcn_str, beh_list, hdr_dict):
 
     # determine correct number of sub-bricks
     #   decon adds an extra for model
-    h_cmd = (
-        f"module load afni-20.2.06 \n 3dinfo -nv {subj_dir}/{dcn_str}_cbucket_REML+tlrc"
-    )
+    h_cmd = f"""
+            module load afni-20.2.06
+            3dinfo -nv {subj_dir}/{dcn_str}_cbucket_REML+tlrc
+        """
     h_len = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
     len_wrong = h_len.communicate()[0].decode("utf-8").strip()
     len_right = int(len_wrong) - 2
 
     # make detrended data
-    #   only contains tent data, extra sub-bricks
-    #   are left behind
+    #   only contains tent data of non-pol/mot
+    #   sub-bricks
     h_cmd = f"""
+        module load afni-20.2.06
         cd {subj_dir}
-        3dTcat -prefix tmp_{dcn_str}_cbucket -tr {hdr_dict["LenTR"]} "{dcn_str}_cbucket_REML+tlrc[0..{len_right}]"
-        3dSynthesize -prefix MVPA_{dcn_str} -matrix X.{dcn_str}.xmat.1D \
-            -cbucket tmp_{dcn_str}_cbucket+tlrc -select {" ".join(brick_list)} -cenfill nbhr
+
+        3dTcat \
+            -prefix tmp_{dcn_str}_cbucket \
+            -tr {hdr_dict["LenTR"]} \
+            "{dcn_str}_cbucket_REML+tlrc[0..{len_right}]"
+
+        3dSynthesize \
+            -prefix MVPA_{dcn_str} \
+            -matrix X.{dcn_str}.xmat.1D \
+            -cbucket tmp_{dcn_str}_cbucket+tlrc \
+            -select {" ".join(brick_list)} \
+            -cenfill nbhr
     """
-    subj_num = subj_dir.split("-")[1].split("/")[0]
-    func_sbatch(h_cmd, 1, 1, 1, f"{subj_num}all", subj_dir)
+    h_cl = subprocess.Popen(h_cmd, shell=True, stdout=subprocess.PIPE)
+    h_cl.wait()
 
 
+# %%
 def main():
 
     """
     Make category files and detrended EPI data.
 
-    Account for whether type(task_dict[phase]) == list (one decon per phase),
-        or type(task_dict[phase]) == dict (multiple decons per phase).
-
     Output will be titled MVPA_foo
     """
 
-    # # For Testing
-    # work_dir = "/scratch/madlab/nate_vCAT/derivatives"
-    # subj = "sub-005"
-    # sess = "ses-S1"
-    # task_dict = {"loc": ["face", "scene"], "Study": ["fblf", "fbls"]}
-    # phase = "loc"
-    # hdr_dict = func_lenRun(subj_dir, phase)
+    # For Testing
+    work_dir = "/scratch/madlab/nate_vCAT/derivatives"
+    subj = "sub-005"
+    sess = "ses-S1"
+    train_dict = {"loc": ["face", "scene"]}
 
     # Receive args
     subj = str(sys.argv[1])
     sess = str(sys.argv[2])
     work_dir = str(sys.argv[3])
+
+    # start work
     subj_dir = os.path.join(work_dir, subj, sess)
 
-    # Get dict
-    with open(os.path.join(subj_dir, "task_dict.json")) as json_file:
-        task_dict = json.load(json_file)
+    # Get train dict, determine phase, beh/timing files
+    with open(os.path.join(subj_dir, "train_dict.json")) as json_file:
+        train_dict = json.load(json_file)
+    phase = list(train_dict.keys())[0]
+    beh_list = train_dict[phase]
 
-    # Work
-    for phase in task_dict:
-        if type(task_dict[phase]) == list:
+    # get header info
+    hdr_dict = func_lenRun(
+        subj_dir,
+        phase,
+    )
 
-            # get header info
-            hdr_dict = func_lenRun(
-                subj_dir,
-                phase,
-            )
+    # set out str
+    dcn_str = f"{phase}_single"
 
-            # set out str
-            dcn_str = f"{phase}_single"
+    # make category file:
+    #   vector of definitions for training
+    #   1 = beh_list[0], 2 = beh_list[1],
+    #   9999 = other times
+    if not os.path.exists(os.path.join(subj_dir, f"MVPA_{dcn_str}_categories.txt")):
+        func_timing(
+            beh_list,
+            hdr_dict,
+            subj_dir,
+            phase,
+            dcn_str,
+        )
 
-            # make cat files
-            if not os.path.exists(
-                os.path.join(subj_dir, f"MVPA_{dcn_str}_categories.txt")
-            ):
-                func_timing(
-                    task_dict[phase],
-                    hdr_dict,
-                    subj_dir,
-                    phase,
-                    dcn_str,
-                )
-
-            # make detrended data
-            if not os.path.exists(os.path.join(subj_dir, f"MVPA_{dcn_str}+tlrc.HEAD")):
-                func_detrend(subj_dir, dcn_str, task_dict[phase], hdr_dict)
-
-        elif type(task_dict[phase]) == dict:
-            for decon in task_dict[phase]:
-
-                hdr_dict = func_lenRun(
-                    subj_dir,
-                    phase,
-                )
-                dcn_str = f"{phase}_{decon}"
-
-                if not os.path.exists(
-                    os.path.join(subj_dir, f"MVPA_{dcn_str}_categories.txt")
-                ):
-                    func_timing(
-                        task_dict[phase][decon],
-                        hdr_dict,
-                        subj_dir,
-                        phase,
-                        dcn_str,
-                    )
-
-                if not os.path.exists(
-                    os.path.join(subj_dir, f"MVPA_{dcn_str}+tlrc.HEAD")
-                ):
-                    func_detrend(subj_dir, dcn_str, task_dict[phase][decon], hdr_dict)
+    # make detrended data
+    if not os.path.exists(os.path.join(subj_dir, f"MVPA_{dcn_str}+tlrc.HEAD")):
+        func_detrend(subj_dir, dcn_str, beh_list, hdr_dict)
 
 
 if __name__ == "__main__":

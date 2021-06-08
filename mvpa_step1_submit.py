@@ -1,13 +1,7 @@
 """
 Notes
 
-task_dict - training and test behaviors must be equal in size (e.g. 2 & 2)
-    so, if "loc" is train data, and training on "face" and "scene",
-    test phases (Study) must also have 2 behaviors.
 
-    key: [list] => decon_string: [tf_strA, tf_strB]
-
-TODO update to account for incorrect CE/P behaviors
 """
 
 # %%
@@ -24,7 +18,7 @@ from datetime import datetime
 sess = "ses-S1"
 deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
 code_dir = "/home/nmuncy/compute/learn_mvpa"
-task_dict = {"loc": ["face", "scene"], "Study": ["fbl"]}
+train_dict = {"loc": ["face", "scene"]}
 
 
 # %%
@@ -44,8 +38,8 @@ def main():
 
         # write json
         subj_dir = os.path.join(deriv_dir, subj, sess)
-        with open(os.path.join(subj_dir, "task_dict.json"), "w") as outfile:
-            json.dump(task_dict, outfile)
+        with open(os.path.join(subj_dir, "train_dict.json"), "w") as outfile:
+            json.dump(train_dict, outfile)
 
         # Set stdout/err file
         h_out = os.path.join(out_dir, f"out_{subj}.txt")
