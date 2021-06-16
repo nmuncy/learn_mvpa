@@ -1,9 +1,11 @@
+# %%
 import os
 import fnmatch
 import pandas as pd
 import numpy as np
 
 
+# %%
 def main():
     """
     This script will combine category and predicted files, split for
@@ -11,11 +13,18 @@ def main():
     """
 
     # Set up
-    deriv_dir = "/scratch/madlab/nate_vCAT/derivatives"
-    beh_dir = os.path.join(deriv_dir, "grpAnalysis/behAnalysis")
-    test_list = ["Study_BE", "Study_CE", "Study_FP"]
+    par_dir = "/scratch/madlab/nate_vCAT"
+    deriv_dir = os.path.join(par_dir, "derivatives")
+    beh_dir = os.path.join(par_dir, "analyses/mvpa_pred")
+    test_list = ["Study_single"]
     sess_str = "ses-S1"
-    cat_dict = {"Face": 1, "Scene": 2}
+
+    # you can determine cat_dict from reviewing the
+    #   MVPA_*_matrix.txt files
+    cat_dict = {
+        "Face": 1,
+        "Scene": 2,
+    }
 
     # make output dir
     if not os.path.exists(beh_dir):
@@ -33,12 +42,21 @@ def main():
 
                 # Combine true, predicted categories
                 df_subj = pd.read_table(
-                    os.path.join(subj_dir, f"MVPA_{test}_cat_updated.txt")
+                    os.path.join(subj_dir, f"MVPA_{test}_cat_updated.txt"),
+                    header=None,
                 )
                 df_subj["Pred"] = pd.read_table(
-                    os.path.join(subj_dir, f"MVPA_pred_{test}.1D")
+                    os.path.join(subj_dir, f"MVPA_pred_{test}.1D"),
+                    header=None,
                 )
                 df_subj.columns = ["True", "Pred"]
+
+                # save all
+                df_subj.to_csv(
+                    os.path.join(beh_dir, f"{subj}_{test}_all.txt"),
+                    index=False,
+                    encoding="utf-8",
+                )
 
                 # Split into individual cat files, for ROC
                 for cat in cat_dict:
